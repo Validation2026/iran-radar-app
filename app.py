@@ -9,10 +9,9 @@ from datetime import datetime
 import random
 
 # --- SİSTEM AYARLARI ---
-st.set_page_config(layout="wide", page_title="WAR ROOM 2026 - FULL SCALE", page_icon="⚔️", initial_sidebar_state="expanded")
+st.set_page_config(layout="wide", page_title="WAR ROOM 2026 - MAX OSINT", page_icon="⚔️", initial_sidebar_state="expanded")
 
 # --- CSS / TAKTİKSEL İKONLAR ---
-# DİKKAT: .stFolium sınıfı eklenerek harita yüksekliği sabitlendi (Titremeyi önler)
 pulse_css = """
 <style>
 @keyframes pulse_red {0% {transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);} 70% {transform: scale(1.5); box-shadow: 0 0 0 12px rgba(255, 0, 0, 0);} 100% {transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);}}
@@ -23,7 +22,7 @@ pulse_css = """
 .strike-il {width: 16px; height: 16px; background-color: #ff9900; border-radius: 50%; border: 2px solid white; animation: pulse_orange 1s infinite;}
 .strike-us {width: 16px; height: 16px; background-color: #00ffff; border-radius: 50%; border: 2px solid white; animation: pulse_cyan 1s infinite;}
 
-/* Harita kutusunun titremesini ve beyaz ekran vermesini önlemek için yükseklik sabitleme */
+/* Harita kutusunun titremesini önlemek için yükseklik sabitleme */
 .stFolium { height: 750px !important; }
 </style>
 """
@@ -40,29 +39,55 @@ def get_live_data(ticker):
         return c, d, p
     except: return 0.0, 0.0, 0.0
 
-def jitter(val, amount=0.08):
-    """Aynı şehre düşen füzelerin haritada üst üste binmesini engeller"""
+def jitter(val, amount=0.15): # Jitter (sapma) miktarı artırıldı ki çok haber gelirse şehirde dağınık patlamalar görünsün
     return val + random.uniform(-amount, amount)
 
-# --- HABER TARAYICI (OSINT ENGINE) ---
+# --- GELİŞMİŞ HABER TARAYICI (MAX OSINT ENGINE) ---
 @st.cache_data(ttl=600)
 def scrape_war_news():
-    queries = ["İran+saldırı", "İsrail+füze+vurdu", "ABD+hava+harekatı"]
+    # Tarama ağı genişletildi
+    queries = [
+        "İran+saldırı", "İsrail+füze+vurdu", "ABD+hava+harekatı", 
+        "İsrail+İran+savaş", "Lübnan+saldırı", "Suriye+İsrail+vurdu", 
+        "Husiler+Kızıldeniz", "Devrim+Muhafızları+vuruldu", "IDF+strike+hava"
+    ]
     found_strikes = []
     
+    # Kapsamlı Şehir/Hedef Tanıma Sözlüğü (50+ Kritik Nokta)
     geo_db = {
+        # İRAN
         "Tahran": [35.68, 51.38, "il"], "İsfahan": [32.65, 51.66, "il"], "Natanz": [33.97, 51.92, "il"],
         "Tebriz": [38.07, 46.29, "il"], "Şiraz": [29.59, 52.58, "il"], "Buşehr": [28.92, 50.83, "il"],
+        "Kerec": [35.83, 50.99, "il"], "Kum": [34.64, 50.87, "il"], "Ahvaz": [31.31, 48.67, "il"],
+        "Kirmanşah": [34.31, 47.06, "il"], "Bender Abbas": [27.18, 56.28, "il"], "Parchin": [35.53, 51.77, "il"],
+        
+        # İSRAİL
         "Tel Aviv": [32.08, 34.78, "ir"], "Hayfa": [32.79, 34.98, "ir"], "Eilat": [29.55, 34.95, "ir"],
         "Kudüs": [31.76, 35.21, "ir"], "Negev": [30.80, 34.84, "ir"], "Aşkelon": [31.66, 34.57, "ir"],
-        "Sanaa": [15.36, 44.19, "us"], "Hudeyde": [14.79, 42.95, "il"], "Şam": [33.51, 36.29, "il"],
-        "Bağdat": [33.31, 44.36, "us"], "Erbil": [36.19, 44.00, "ir"], "Hürmüz": [26.56, 56.45, "ir"],
-        "Beyrut": [33.89, 35.50, "il"], "Deyrizor": [35.33, 40.14, "us"]
+        "Aşdod": [31.80, 34.65, "ir"], "Safed": [32.96, 35.49, "ir"], "Netanya": [32.32, 34.85, "ir"],
+        "Dimona": [31.07, 35.02, "ir"], "Meron": [32.99, 35.41, "ir"], "Golan": [33.01, 35.75, "ir"],
+        
+        # LÜBNAN
+        "Beyrut": [33.89, 35.50, "il"], "Dahiye": [33.85, 35.51, "il"], "Baalbek": [34.00, 36.21, "il"],
+        "Sur": [33.27, 35.20, "il"], "Sayda": [33.56, 35.37, "il"], "Nebatiye": [33.37, 35.48, "il"],
+        
+        # SURİYE
+        "Şam": [33.51, 36.29, "il"], "Halep": [36.20, 37.13, "il"], "Humus": [34.73, 36.71, "il"],
+        "Deyrizor": [35.33, 40.14, "us"], "Lazkiye": [35.53, 35.79, "il"], "Meyadin": [35.01, 40.45, "us"],
+        
+        # IRAK
+        "Bağdat": [33.31, 44.36, "us"], "Erbil": [36.19, 44.00, "ir"], "Cürf es-Sahar": [32.89, 44.18, "us"],
+        "Al Asad": [33.79, 42.43, "ir"], "Babil": [32.46, 44.40, "us"], "Kerkük": [35.46, 44.39, "us"],
+        
+        # YEMEN & KÖRFEZ
+        "Sanaa": [15.36, 44.19, "us"], "Hudeyde": [14.79, 42.95, "il"], "Taiz": [13.57, 43.95, "us"],
+        "Kızıldeniz": [15.50, 41.50, "ir"], "Aden": [12.80, 45.03, "ir"], "Hürmüz": [26.56, 56.45, "ir"]
     }
 
+    # Tarama limiti her kelime için 25 habere çıkarıldı
     for q in queries:
         feed = feedparser.parse(f"https://news.google.com/rss/search?q={q}+after:2026-02-27&hl=tr&gl=TR&ceid=TR:tr")
-        for entry in feed.entries[:8]:
+        for entry in feed.entries[:25]:
             for city, info in geo_db.items():
                 if city.lower() in entry.title.lower():
                     found_strikes.append({
@@ -71,7 +96,7 @@ def scrape_war_news():
                         "actor": info[2],
                         "desc": f"Kaynak: {entry.title}"
                     })
-                    break
+                    break # Bir haberde şehri bulursa o haberi geç
     return found_strikes
 
 # --- SIDEBAR (10 SN YENİLEME) ---
@@ -122,9 +147,8 @@ def map_render():
         folium.GeoJson(iran_geojson, style_function=lambda x: {'fillColor': '#330000', 'color': '#ff0000', 'weight': 1, 'fillOpacity': 0.15}).add_to(m)
     except: pass
 
-    # --- DEVASA SAVAŞ VERİTABANI (28 ŞUBAT 2026 SONRASI) ---
+    # --- DEVASA SAVAŞ VERİTABANI (SABİT KAYITLAR) ---
     sabit_olaylar = [
-        # İSRAİL'İN İRAN'A VE VEKİLLERİNE SALDIRILARI (Turuncu - il)
         {"isim": "Parchin Askeri Kompleksi", "lat": 35.53, "lon": 51.77, "actor": "il", "desc": "Tahran Yakını Füze Üretim Tesisi Vuruldu"},
         {"isim": "İsfahan Radar Sistemi", "lat": 32.65, "lon": 51.66, "actor": "il", "desc": "S-300 Bataryaları İmha Edildi"},
         {"isim": "Natanz Nükleer Tesisi Şevresi", "lat": 33.97, "lon": 51.92, "actor": "il", "desc": "Hava Savunma Hatlarına Önleyici Vuruş"},
@@ -137,8 +161,6 @@ def map_render():
         {"isim": "Beyrut Dahiye Merkez", "lat": 33.85, "lon": 35.51, "actor": "il", "desc": "Hizbullah Üst Düzey Komuta Merkezi Vuruldu"},
         {"isim": "Bekaa Vadisi", "lat": 34.00, "lon": 36.14, "actor": "il", "desc": "Hava Savunma Sistemleri İmha Edildi"},
         {"isim": "Hudeyde Limanı (Yemen)", "lat": 14.79, "lon": 42.95, "actor": "il", "desc": "Husi Petrol Depoları İsrail F-15'lerince Vuruldu"},
-
-        # İRAN VE VEKİLLERİNİN SALDIRILARI (Kırmızı - ir)
         {"isim": "Nevatim Hava Üssü", "lat": 31.20, "lon": 35.01, "actor": "ir", "desc": "Balistik Füze Yağmuru - Pistlerde Hasar"},
         {"isim": "Ramon Hava Üssü", "lat": 30.77, "lon": 34.67, "actor": "ir", "desc": "Fettah Hipersonik Füzeleri Hedef Aldı"},
         {"isim": "Tel Aviv (Kirya Karargahı)", "lat": 32.07, "lon": 34.78, "actor": "ir", "desc": "Şehir Merkezine Yoğun İHA ve Füze Dalgası"},
@@ -150,8 +172,6 @@ def map_render():
         {"isim": "Kızıldeniz Ticari Gemi", "lat": 15.50, "lon": 41.50, "actor": "ir", "desc": "Husiler Tarafından Gemisine El Konuldu"},
         {"isim": "Kızıldeniz Petrol Tankeri", "lat": 14.20, "lon": 42.80, "actor": "ir", "desc": "Gemi Savar Füze ile Tanker Vuruldu"},
         {"isim": "Erbil ABD Konsolosluğu Yakını", "lat": 36.23, "lon": 44.01, "actor": "ir", "desc": "Mossad Karargahı İddiasıyla Balistik Atış"},
-
-        # ABD SALDIRILARI (Mavi - us)
         {"isim": "Sanaa Yeraltı Depoları", "lat": 15.36, "lon": 44.19, "actor": "us", "desc": "B-2 Spirit Bombardıman Uçakları Vurdu"},
         {"isim": "Al Bukamal Sınır Kapısı", "lat": 34.45, "lon": 40.95, "actor": "us", "desc": "İran-Suriye İkmal Konvoyu İmha Edildi"},
         {"isim": "Deyrizor Milis Karargahı", "lat": 35.33, "lon": 40.14, "actor": "us", "desc": "Devrim Muhafızları Danışmanları Hedef Alındı"},
@@ -160,7 +180,6 @@ def map_render():
         {"isim": "Taiz Füze Fırlatma Alanı", "lat": 13.57, "lon": 43.95, "actor": "us", "desc": "Kızıldeniz'e Fırlatılmaya Hazır Füzeler Vuruldu"}
     ]
 
-    # Canlı Haberleri Çek ve Sabitlere Ekle
     haber_olaylari = scrape_war_news()
     tum_olaylar = sabit_olaylar + haber_olaylari
     
@@ -168,7 +187,6 @@ def map_render():
         cls = "strike-ir" if olay["actor"] == "ir" else "strike-il" if olay["actor"] == "il" else "strike-us"
         border = "red" if olay["actor"] == "ir" else "orange" if olay["actor"] == "il" else "cyan"
         
-        # Jitter uygulayarak aynı koordinattaki füzeleri ayır
         lat_final = jitter(olay["lat"]) if "lat" in olay else olay["loc"][0]
         lon_final = jitter(olay["lon"]) if "lon" in olay else olay["loc"][1]
 
@@ -187,8 +205,6 @@ def map_render():
             icon=folium.DivIcon(html=f'<div class="{cls}"></div>')
         ).add_to(m)
 
-    # DİKKAT: 'key' parametresi haritayı iframe içinde kalıcı hale getirir ve titremeyi yok eder!
-    # DİKKAT: 'returned_objects=[]' parametresi haritanın senin hareketlerinle yenilenmesini (titremesini) tamamen durdurur!
     st_folium(m, use_container_width=True, height=750, key="war_map_2026", returned_objects=[])
 
 map_render()
