@@ -15,6 +15,9 @@ from tradingview_ta import TA_Handler, Interval
 # --- SİSTEM AYARLARI ---
 st.set_page_config(layout="wide", page_title="İran Savaş Monitörü", page_icon="⚔️", initial_sidebar_state="expanded")
 
+def get_tsi_time():
+    return (datetime.now() + timedelta(hours=3)).strftime('%H:%M:%S')
+    
 # --- SESSION STATE (MANUEL VERİLER VE DEĞİŞİM TAKİBİ İÇİN) ---
 if 'manual_data' not in st.session_state:
     st.session_state.manual_data = {
