@@ -12,6 +12,7 @@ import random
 st.set_page_config(layout="wide", page_title="WAR ROOM 2026 - FULL SCALE", page_icon="⚔️", initial_sidebar_state="expanded")
 
 # --- CSS / TAKTİKSEL İKONLAR ---
+# DİKKAT: .stFolium sınıfı eklenerek harita yüksekliği sabitlendi (Titremeyi önler)
 pulse_css = """
 <style>
 @keyframes pulse_red {0% {transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);} 70% {transform: scale(1.5); box-shadow: 0 0 0 12px rgba(255, 0, 0, 0);} 100% {transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);}}
@@ -21,6 +22,9 @@ pulse_css = """
 .strike-ir {width: 16px; height: 16px; background-color: #ff0000; border-radius: 50%; border: 2px solid white; animation: pulse_red 1s infinite;}
 .strike-il {width: 16px; height: 16px; background-color: #ff9900; border-radius: 50%; border: 2px solid white; animation: pulse_orange 1s infinite;}
 .strike-us {width: 16px; height: 16px; background-color: #00ffff; border-radius: 50%; border: 2px solid white; animation: pulse_cyan 1s infinite;}
+
+/* Harita kutusunun titremesini ve beyaz ekran vermesini önlemek için yükseklik sabitleme */
+.stFolium { height: 750px !important; }
 </style>
 """
 
@@ -183,6 +187,7 @@ def map_render():
             icon=folium.DivIcon(html=f'<div class="{cls}"></div>')
         ).add_to(m)
 
-    st_folium(m, use_container_width=True, height=750)
+    # DİKKAT: 'key' parametresi haritayı iframe içinde kalıcı hale getirir ve titremeyi yok eder!
+    st_folium(m, use_container_width=True, height=750, key="war_map_2026")
 
 map_render()
