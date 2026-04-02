@@ -4,130 +4,162 @@ import yfinance as yf
 import folium
 from streamlit_folium import st_folium
 import time
+import feedparser
+from datetime import datetime
+import random
 
 # --- SAYFA AYARLARI ---
-st.set_page_config(layout="wide", page_title="Stratejik Analiz & Piyasa Terminali", page_icon="📡")
+st.set_page_config(layout="wide", page_title="Global OSINT & Market Command", page_icon="🌍", initial_sidebar_state="expanded")
 
-# --- YAN MENÜ ---
-st.sidebar.title("📡 Sistem Durumu")
-st.sidebar.success("🟢 CANLI AKIŞ AKTİF")
-st.sidebar.info("Veriler her 60 saniyede bir otomatik yenilenir. Haritadaki hedeflerin üzerine gelerek detayları görebilirsiniz.")
-st.sidebar.markdown("---")
-st.sidebar.write(f"Son Güncelleme: {time.strftime('%H:%M:%S')}")
+# --- VERİ ÇEKME FONKSİYONLARI (CACHE SİSTEMİ) ---
 
-# --- ANA BAŞLIK ---
-st.title("🛡️ Taktiksel İstihbarat ve Küresel Emtia Terminali")
-st.divider()
-
-# --- SEKME YAPISI ---
-tab1, tab2 = st.tabs(["🗺️ Detaylı Operasyon Haritası", "📟 Canlı Veri Terminali"])
-
-# --- TAB 1: DETAYLI HARİTA ---
-with tab1:
-    st.subheader("Bölgesel Saldırı ve Operasyon Detayları")
-    
-    m = folium.Map(location=[32.0, 53.0], zoom_start=5, tiles="CartoDB dark_matter")
-
-    # İran Sınır Vurgusu
+# Finansal Veriler (60 Saniyede Bir Güncellenir)
+@st.cache_data(ttl=60)
+def get_finance_data(ticker):
     try:
-        iran_geojson = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/IRN.geo.json"
-        folium.GeoJson(iran_geojson, style_function=lambda x: {'fillColor': '#8b0000', 'color': '#ff0000', 'weight': 1, 'fillOpacity': 0.1}).add_to(m)
-    except: pass
+        t = yf.Ticker(ticker)
+        h = t.history(period="5d")
+        if len(h) >= 2:
+            close = h['Close'].iloc[-1]
+            prev = h['Close'].iloc[-2]
+            return close, close - prev, ((close - prev) / prev) * 100
+        return 0, 0, 0
+    except:
+        return 0, 0, 0
 
-    # Genişletilmiş Bombalanan Yerler Verisi
-    bombalanan_yerler = [
-        {"isim": "İsfahan Hava Üssü", "lat": 32.65, "lon": 51.66, "tarih": "19 Nisan 2024", "kaynak": "ABC News / OSINT"},
-        {"isim": "Natanz Nükleer Tesisi", "lat": 33.97, "lon": 51.92, "tarih": "Sürekli Tehdit", "kaynak": "IAEA Raporları"},
-        {"isim": "Tebriz Radar İstasyonu", "lat": 38.07, "lon": 46.29, "tarih": "19 Nisan 2024", "kaynak": "Yerel Kaynaklar"},
-        {"isim": "Bandar Abbas Donanma Üssü", "lat": 27.18, "lon": 56.28, "tarih": "Gerginlik Artışı", "kaynak": "Uydu Görüntüleri"},
-        {"isim": "Kharg Adası Petrol Terminali", "lat": 29.23, "lon": 50.31, "tarih": "Siber Saldırı / Tehdit", "kaynak": "Enerji Bakanlığı"},
-        {"isim": "Ahvaz Lojistik Merkezi", "lat": 31.31, "lon": 48.67, "tarih": "Patlama Raporu", "kaynak": "Telegram OSINT"},
-        {"isim": "Kermanshah İHA Üssü", "lat": 34.34, "lon": 47.15, "tarih": "Hava Hareketliliği", "kaynak": "Sınır Gözlem"},
-        {"isim": "Şiraz Hava Savunma Hattı", "lat": 29.54, "lon": 52.58, "tarih": "Aktif Çatışma", "kaynak": "Sosyal Medya Teyitli"},
-        {"isim": "Hürmüz Boğazı Devriye Hattı", "lat": 26.56, "lon": 56.45, "tarih": "Gemilere El Koyma", "kaynak": "Lloyd's List"}
-    ]
-
-    # Pulse CSS
-    pulse_css = """<style>@keyframes pulse {0% {transform: scale(0.9); opacity: 1;} 50% {transform: scale(1.4); opacity: 0.6;} 100% {transform: scale(0.9); opacity: 1;}}
-    .pulse-icon {width: 20px; height: 20px; background-color: rgba(255, 0, 0, 0.8); border-radius: 50%; border: 1px solid white; box-shadow: 0 0 10px red; animation: pulse 1.5s infinite;}</style>"""
-    m.get_root().html.add_child(folium.Element(pulse_css))
-
-    for b in bombalanan_yerler:
-        # Tooltip içeriği: Üstüne gelince görünen bilgi
-        tooltip_content = f"""
-            <div style="font-family: sans-serif; color: white; background: #222; padding: 10px; border-radius: 5px; border: 1px solid red;">
-                <b>📍 {b['isim']}</b><br>
-                📅 Tarih: {b['tarih']}<br>
-                📡 Kaynak: {b['kaynak']}
-            </div>
-        """
-        folium.Marker(
-            location=[b["lat"], b["lon"]],
-            tooltip=tooltip_content,
-            icon=folium.DivIcon(html='<div class="pulse-icon"></div>')
-        ).add_to(m)
-
-    st_folium(m, width="100%", height=600)
-
-# --- TAB 2: DEVASA VERİ TERMİNALİ ---
-with tab2:
-    @st.cache_data(ttl=60)
-    def get_data(ticker):
-        try:
-            t = yf.Ticker(ticker)
-            h = t.history(period="2d")
-            return h['Close'].iloc[-1], h['Close'].iloc[-1] - h['Close'].iloc[-2]
-        except: return 0, 0
-
-    # Gram Altın/Gümüş Hesaplama (Ons / 31.1035 * USDTRY)
-    usd_try, _ = get_data("TRY=X")
-    gold_ons, gold_chg = get_data("GC=F")
-    silver_ons, silver_chg = get_data("SI=F")
+# OSINT Canlı Haber Tarayıcı (600 Saniye / 10 Dakikada Bir Güncellenir)
+@st.cache_data(ttl=600)
+def fetch_live_osint():
+    feed_url = "https://news.google.com/rss/search?q=saldırı+OR+füze+OR+patlama+OR+hava+savunma+İran+İsrail+ABD&hl=tr&gl=TR&ceid=TR:tr"
+    feed = feedparser.parse(feed_url)
     
-    gram_altin = (gold_ons / 31.1035) * usd_try if usd_try > 0 else 0
-    gram_gumus = (silver_ons / 31.1035) * usd_try if usd_try > 0 else 0
+    # Stratejik Noktalar Sözlüğü (Haberde geçerse haritaya eklenecek)
+    stratejik_noktalar = {
+        "Tahran": (35.68, 51.38), "İsfahan": (32.65, 51.66), "Tebriz": (38.07, 46.29),
+        "Şam": (33.51, 36.29), "Tel Aviv": (32.08, 34.78), "Kudüs": (31.76, 35.21),
+        "Hayfa": (32.79, 34.98), "Negev": (30.80, 34.84), "Erbil": (36.19, 44.00),
+        "Bağdat": (33.31, 44.36), "Kızıldeniz": (22.11, 38.59), "Hürmüz": (26.56, 56.45),
+        "Beyrut": (33.89, 35.50), "Güney Lübnan": (33.27, 35.20), "Yemen": (15.55, 48.51)
+    }
+    
+    canli_olaylar = []
+    for item in feed.entries[:15]:
+        for sehir, kordinat in stratejik_noktalar.items():
+            if sehir.lower() in item.title.lower():
+                canli_olaylar.append({
+                    "isim": f"SON DAKİKA: {sehir} Bölgesi",
+                    "lat": kordinat[0] + random.uniform(-0.1, 0.1), # Aynı noktada üst üste binmemesi için hafif sapma
+                    "lon": kordinat[1] + random.uniform(-0.1, 0.1),
+                    "tarih": "Canlı Teyit (Son 10 Dk)",
+                    "kaynak": item.title,
+                    "link": item.link,
+                    "tip": "yeni"
+                })
+                break # Bir haber için bir lokasyon yeterli
+    return canli_olaylar
 
-    # Kategorize Edilmiş Veriler
-    st.subheader("🛢️ Enerji ve Navlun (Hürmüz & Global)")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.metric("Brent Vadeli (BZ=F)", f"${get_data('BZ=F')[0]:.2f}", f"{get_data('BZ=F')[1]:.2f}")
-    with c2: st.metric("Baltic Dry (BDRY)", f"{get_data('BDRY')[0]:.2f}", f"{get_data('BDRY')[1]:.2f}%")
-    with c3: st.metric("Avrupa Doğalgaz (TTF)", f"€{get_data('TTF=F')[0]:.2f}", f"{get_data('TTF=F')[1]:.2f}")
-    with c4: st.metric("Jet Yakıt (Proxy: HO=F)", f"${get_data('HO=F')[0]:.2f}", f"{get_data('HO=F')[1]:.2f}")
+# --- YAN MENÜ: CANLI FİNANS TERMINALI (SÜREKLİ GÜNCELLENİR) ---
+st.sidebar.title("📟 CANLI TERMİNAL")
+st.sidebar.caption(f"⏱️ Son Yenilenme: {datetime.now().strftime('%H:%M:%S')} (Otomatik)")
+st.sidebar.divider()
 
-    st.markdown("---")
-    st.subheader("🏗️ Endüstriyel Emtia ve Tarım")
-    c5, c6, c7, c8 = st.columns(4)
-    with c5: st.metric("Alüminyum", f"${get_data('ALI=F')[0]:.2f}", f"{get_data('ALI=F')[1]:.2f}")
-    with c6: st.metric("Gübre (CF Ind.)", f"${get_data('CF')[0]:.2f}", f"{get_data('CF')[1]:.2f}")
-    with c7: st.metric("Polyester (Proxy: PX)", f"${get_data('CE')[0]:.2f}", f"{get_data('CE')[1]:.2f}") # Celanese Corp proxy
-    with c8: st.metric("Sıvı Hidrokarbon", f"${get_data('CL=F')[0]:.2f}", f"{get_data('CL=F')[1]:.2f}")
+# Altın/Gümüş Gram Hesaplaması İçin Dolar Kuru
+usd_fiyat, usd_degisim, usd_pct = get_finance_data("TRY=X")
+gold_ons, _, _ = get_finance_data("GC=F")
+silver_ons, _, _ = get_finance_data("SI=F")
+gram_altin = (gold_ons / 31.1035) * usd_fiyat if usd_fiyat > 0 else 0
+gram_gumus = (silver_ons / 31.1035) * usd_fiyat if usd_fiyat > 0 else 0
 
-    st.markdown("---")
-    st.subheader("💰 Değerli Metaller (Gram/TRY)")
-    c9, c10, c11, c12 = st.columns(4)
-    with c9: st.metric("Altın Gram", f"₺{gram_altin:.2f}")
-    with c10: st.metric("Gümüş Gram", f"₺{gram_gumus:.2f}")
-    with c11: st.metric("VIX (Korku)", f"{get_data('^VIX')[0]:.2f}", f"{get_data('^VIX')[1]:.2f}%")
-    with c12: st.metric("USD/TRY", f"₺{usd_try:.4f}")
+def sidebar_metric(label, symbol, formatter="${:.2f}"):
+    c, d, p = get_finance_data(symbol)
+    st.sidebar.metric(label, formatter.format(c), f"{d:+.2f} ({p:+.2f}%)")
 
-    st.markdown("---")
-    st.subheader("🏛️ Tahviller ve Risk (CDS)")
-    c13, c14, c15, c16 = st.columns(4)
-    with c13: st.metric("ABD 10Y Tahvil", f"%{get_data('^TNX')[0]:.2f}", f"{get_data('^TNX')[1]:.2f}")
-    with c14: st.metric("TR 10Y (Proxy: TUR)", f"{get_data('TUR')[0]:.2f}", f"{get_data('TUR')[1]:.2f}")
-    with c15: st.metric("Hürmüz Gemi Trafiği", "AKTİF", "Normal") # Statik/Simüle
-    with c16: st.metric("Türkiye CDS (Simüle)", "265.4", "-2.1") # CDS doğrudan yfinance'de yoktur
+with st.sidebar.expander("🛢️ ENERJİ & NAVLUN", expanded=True):
+    sidebar_metric("Brent Vadeli", "BZ=F")
+    sidebar_metric("Brent Spot (Proxy)", "BNO") # Gerçek spot verisi değişkendir, ETF proxy kullanılır
+    sidebar_metric("Sıvı Hidrokarbon (WTI)", "CL=F")
+    sidebar_metric("Avrupa Doğalgaz (TTF)", "TTF=F", "€{:.2f}")
+    sidebar_metric("Jet Yakıtı (Proxy)", "HO=F")
+    sidebar_metric("Baltic Dry (BDRY)", "BDRY", "{:.2f}")
 
-    # Tanker Verileri İçin Özel Panel
-    st.markdown("---")
-    st.subheader("🚢 Hürmüz Boğazı Tanker Takibi (Simüle Edilen Veri)")
-    col_t1, col_t2 = st.columns(2)
-    with col_t1:
-        st.info("⬅️ **Batıya Giden Tanker Sayısı (Son 24s):** 14")
-    with col_t2:
-        st.info("➡️ **Doğuya Giden Tanker Sayısı (Son 24s):** 11")
+with st.sidebar.expander("🚢 HÜRMÜZ TRAFİĞİ (Simüle)", expanded=True):
+    # Bu veriler API'ler ücretli olduğu için rastgele dalgalanan canlı simülasyonlardır
+    bati_tanker = 14 + random.randint(-2, 2)
+    dogu_tanker = 11 + random.randint(-2, 2)
+    st.sidebar.metric("⬅️ Batıya Giden Tanker", bati_tanker, random.randint(-1, 1))
+    st.sidebar.metric("➡️ Doğuya Giden Tanker", dogu_tanker, random.randint(-1, 1))
 
-# --- AUTO REFRESH SİSTEMİ ---
+with st.sidebar.expander("🏗️ ENDÜSTRİYEL & TARIM", expanded=False):
+    sidebar_metric("Alüminyum", "ALI=F")
+    sidebar_metric("Gübre (CF Ind.)", "CF")
+    sidebar_metric("Polyester (Celanese)", "CE")
+
+with st.sidebar.expander("💰 METALLER & DÖVİZ", expanded=False):
+    st.sidebar.metric("Altın Gram", f"₺{gram_altin:.2f}")
+    st.sidebar.metric("Gümüş Gram", f"₺{gram_gumus:.2f}")
+    sidebar_metric("USD/TRY", "TRY=X", "₺{:.4f}")
+
+with st.sidebar.expander("🏛️ RİSK & TAHVİL", expanded=True):
+    sidebar_metric("VIX (Korku Endeksi)", "^VIX", "{:.2f}")
+    sidebar_metric("ABD 10Y Tahvil", "^TNX", "%{:.2f}")
+    sidebar_metric("TR 10Y (TUR Proxy)", "TUR", "${:.2f}")
+    st.sidebar.metric("Türkiye CDS (Simüle)", f"{265.4 + random.uniform(-3, 3):.1f}", "Canlı")
+
+# --- ANA EKRAN: OSINT HARİTASI ---
+st.title("🗺️ Taktiksel İstihbarat ve Operasyon Haritası")
+st.caption("Bu harita 10 dakikada bir küresel istihbarat ağlarını tarayarak yeni çatışma noktalarını otomatik olarak ekler.")
+
+# Harita Altyapısı
+m = folium.Map(location=[32.0, 45.0], zoom_start=5, tiles="CartoDB dark_matter")
+
+# Tarihsel Veriler (Çatışmanın Başından Beri)
+tarihsel_olaylar = [
+    {"isim": "İsrail Şam Konsolosluğu Saldırısı", "lat": 33.51, "lon": 36.29, "tarih": "1 Nisan 2024", "kaynak": "Tarihsel Kayıt", "tip": "eski"},
+    {"isim": "Gerçek Vaat Operasyonu (Negev Üssü)", "lat": 30.80, "lon": 34.84, "tarih": "13-14 Nisan 2024", "kaynak": "Tarihsel Kayıt", "tip": "eski"},
+    {"isim": "İsfahan Hava Üssü Misillemesi", "lat": 32.65, "lon": 51.66, "tarih": "19 Nisan 2024", "kaynak": "Tarihsel Kayıt", "tip": "eski"},
+    {"isim": "Kızıldeniz Husiler Gemi Vurulması", "lat": 15.0, "lon": 42.0, "tarih": "2023 Sonu - Devam Ediyor", "kaynak": "CENTCOM", "tip": "eski"},
+    {"isim": "Beyrut Güney Banliyö Saldırıları", "lat": 33.85, "lon": 35.51, "tarih": "Eylül 2024", "kaynak": "Tarihsel Kayıt", "tip": "eski"},
+    {"isim": "İran 2. Balistik Füze Dalgası (Nevatim)", "lat": 31.20, "lon": 35.01, "tarih": "Ekim 2024", "kaynak": "Tarihsel Kayıt", "tip": "eski"},
+]
+
+# Canlı Taranan Olayları Çek
+canli_olaylar = fetch_live_osint()
+tum_olaylar = tarihsel_olaylar + canli_olaylar
+
+# Animasyon CSS
+pulse_css = """
+<style>
+@keyframes pulse_red {0% {transform: scale(0.9); opacity: 1;} 50% {transform: scale(1.5); opacity: 0.6;} 100% {transform: scale(0.9); opacity: 1;}}
+@keyframes pulse_orange {0% {transform: scale(0.9); opacity: 1;} 50% {transform: scale(1.2); opacity: 0.8;} 100% {transform: scale(0.9); opacity: 1;}}
+.icon-yeni {width: 25px; height: 25px; background-color: rgba(255, 0, 0, 0.9); border-radius: 50%; border: 2px solid white; box-shadow: 0 0 15px red; animation: pulse_red 1s infinite;}
+.icon-eski {width: 15px; height: 15px; background-color: rgba(255, 165, 0, 0.7); border-radius: 50%; border: 1px solid white; animation: pulse_orange 2.5s infinite;}
+</style>
+"""
+m.get_root().html.add_child(folium.Element(pulse_css))
+
+# İşaretçileri Haritaya Ekleme
+for b in tum_olaylar:
+    icon_class = "icon-yeni" if b["tip"] == "yeni" else "icon-eski"
+    border_color = "red" if b["tip"] == "yeni" else "orange"
+    
+    tooltip_html = f"""
+        <div style="font-family: Arial; color: white; background: #111; padding: 10px; border-radius: 5px; border: 1px solid {border_color}; min-width: 200px;">
+            <b style="color:{border_color};">📍 {b['isim']}</b><br><hr style="margin:5px 0;">
+            📅 <b>Tarih:</b> {b['tarih']}<br>
+            📡 <b>Kaynak:</b> {b['kaynak']}
+        </div>
+    """
+    
+    folium.Marker(
+        location=[b["lat"], b["lon"]],
+        tooltip=tooltip_html,
+        icon=folium.DivIcon(html=f'<div class="{icon_class}"></div>')
+    ).add_to(m)
+
+st_folium(m, use_container_width=True, height=750)
+
+# --- OTOMATİK YENİLEME DÖNGÜSÜ (60 Saniye) ---
+# Site açık kaldığı sürece verileri her dakika günceller.
+# Harita taraması ise cache (ttl=600) sayesinde 10 dakikada bir yeni veriye bakar.
 time.sleep(60)
 st.rerun()
