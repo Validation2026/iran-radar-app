@@ -5,3 +5,4 @@ plotly
 feedparser
 folium
 streamlit-folium
+tradingview-ta
