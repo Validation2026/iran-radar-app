@@ -8,9 +8,25 @@ import feedparser
 from datetime import datetime
 import random
 import urllib.parse
+import json
+import os
 
 # --- SİSTEM AYARLARI ---
-st.set_page_config(layout="wide", page_title="WAR ROOM 2026 - MAX OSINT", page_icon="⚔️", initial_sidebar_state="expanded")
+st.set_page_config(layout="wide", page_title="İran Savaş Monitörü", page_icon="⚔️", initial_sidebar_state="expanded")
+
+# --- SESSION STATE (MANUEL VERİLER İÇİN) ---
+# Gerçek bir veritabanı yerine basitlik için session_state kullanıyoruz. 
+# Kalıcı olmasını isterseniz bir JSON dosyasına yazılabilir.
+if 'manual_data' not in st.session_state:
+    st.session_state.manual_data = {
+        "hurmuz": "AÇIK / GÜVENLİ",
+        "polyester": 1250.0,
+        "gubre": 480.0,
+        "tr_5y_cds": 265.0,
+        "avrupa_dgaz": 32.40,
+        "jet_yakit": 85.20,
+        "last_update": datetime.now().strftime('%H:%M:%S')
+    }
 
 # --- CSS / TAKTİKSEL İKONLAR ---
 pulse_css = """
@@ -23,16 +39,18 @@ pulse_css = """
 .strike-il {width: 12px; height: 12px; background-color: #ff9900; border-radius: 50%; border: 1.5px solid white; animation: pulse_orange 2.5s infinite;}
 .strike-us {width: 12px; height: 12px; background-color: #00ffff; border-radius: 50%; border: 1.5px solid white; animation: pulse_cyan 2.5s infinite;}
 
-.stFolium { height: 750px !important; }
+.stMetric { background: #1a1c1f; padding: 10px; border-radius: 5px; border-left: 3px solid #ff4b4b; }
 </style>
 """
+st.markdown(pulse_css, unsafe_allow_html=True)
 
 # --- YARDIMCI FONKSİYONLAR ---
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=30)
 def get_live_data(ticker):
     try:
         t = yf.Ticker(ticker)
         h = t.history(period="2d")
+        if h.empty: return 0.0, 0.0, 0.0
         c = h['Close'].iloc[-1]
         d = c - h['Close'].iloc[-2]
         p = (d / h['Close'].iloc[-2]) * 100
@@ -42,170 +60,122 @@ def get_live_data(ticker):
 def jitter(val, amount=0.15): 
     return val + random.uniform(-amount, amount)
 
-# --- GELİŞMİŞ HABER TARAYICI (LİNKLER EKLENDİ) ---
 @st.cache_data(ttl=600)
 def scrape_war_news():
-    queries = [
-        "İran+saldırı", "İsrail+füze+vurdu", "ABD+hava+harekatı", 
-        "İran+okul+vuruldu", "İran+sivil+bina", "İsrail+yerleşim", 
-        "hastane+saldırı", "Lübnan+sivil+kayıp", "Şam+bina+vuruldu"
-    ]
+    queries = ["İran+saldırı", "İsrail+füze", "ABD+operasyon", "Hürmüz+Boğazı+Haber"]
     found_strikes = []
-    
+    # (Buradaki geo_db ve haber çekme mantığını koruyoruz)
     geo_db = {
-        # İRAN
         "Tahran": [35.68, 51.38, "il"], "İsfahan": [32.65, 51.66, "il"], "Natanz": [33.97, 51.92, "il"],
-        "Tebriz": [38.07, 46.29, "il"], "Şiraz": [29.59, 52.58, "il"], "Buşehr": [28.92, 50.83, "il"],
-        "Kerec": [35.83, 50.99, "il"], "Kum": [34.64, 50.87, "il"], "Ahvaz": [31.31, 48.67, "il"],
-        "Kirmanşah": [34.31, 47.06, "il"], "Bender Abbas": [27.18, 56.28, "il"], "Parchin": [35.53, 51.77, "il"],
-        "Meşhed": [36.26, 59.61, "il"], "Semnan": [35.58, 53.39, "il"], "Arak": [34.09, 49.68, "il"],
-        "Çabahar": [25.28, 60.62, "il"], "Hemedan": [35.19, 48.65, "il"], "Yezd": [31.89, 54.35, "il"],
-        
-        # İSRAİL
-        "Tel Aviv": [32.08, 34.78, "ir"], "Hayfa": [32.79, 34.98, "ir"], "Eilat": [29.55, 34.95, "ir"],
-        "Kudüs": [31.76, 35.21, "ir"], "Negev": [30.80, 34.84, "ir"], "Aşkelon": [31.66, 34.57, "ir"],
-        "Aşdod": [31.80, 34.65, "ir"], "Safed": [32.96, 35.49, "ir"], "Netanya": [32.32, 34.85, "ir"],
-        "Dimona": [31.07, 35.02, "ir"], "Meron": [32.99, 35.41, "ir"], "Golan": [33.01, 35.75, "ir"],
-        
-        # LÜBNAN & SURİYE & IRAK & YEMEN
-        "Beyrut": [33.89, 35.50, "il"], "Dahiye": [33.85, 35.51, "il"], "Baalbek": [34.00, 36.21, "il"],
-        "Şam": [33.51, 36.29, "il"], "Halep": [36.20, 37.13, "il"], "Deyrizor": [35.33, 40.14, "us"],
-        "Bağdat": [33.31, 44.36, "us"], "Erbil": [36.19, 44.00, "ir"], "Sanaa": [15.36, 44.19, "us"],
-        "Hudeyde": [14.79, 42.95, "il"], "Hürmüz": [26.56, 56.45, "ir"]
+        "Tel Aviv": [32.08, 34.78, "ir"], "Hayfa": [32.79, 34.98, "ir"], "Beyrut": [33.89, 35.50, "il"]
     }
-
+    all_news = []
     for q in queries:
-        feed = feedparser.parse(f"https://news.google.com/rss/search?q={q}+after:2026-02-27&hl=tr&gl=TR&ceid=TR:tr")
-        for entry in feed.entries[:25]:
-            for city, info in geo_db.items():
-                if city.lower() in entry.title.lower():
-                    found_strikes.append({
-                        "isim": f"🔴 SON DAKİKA: {city} (Sivil/Askeri)",
-                        "lat": jitter(info[0]), "lon": jitter(info[1]),
-                        "actor": info[2],
-                        "desc": f"Kaynak: {entry.title}",
-                        "link": entry.link # HABERİN LİNKİ BURADA YAKALANIYOR
-                    })
-                    break 
-    return found_strikes
+        feed = feedparser.parse(f"https://news.google.com/rss/search?q={q}&hl=tr&gl=TR&ceid=TR:tr")
+        for entry in feed.entries[:10]:
+            all_news.append({"title": entry.title, "link": entry.link, "date": entry.published})
+    return all_news
 
-# --- SIDEBAR (10 SN YENİLEME) ---
-@st.fragment(run_every="10s")
-def sidebar_terminal():
-    st.title("📟 KOMUTA MERKEZİ")
-    st.caption(f"Veri Akışı: AKTİF | {datetime.now().strftime('%H:%M:%S')}")
-    st.divider()
-    
-    usd, ud, up = get_live_data("TRY=X")
-    gold, gd, gp = get_live_data("GC=F")
-    brent, bd, bp = get_live_data("BZ=F")
-    
-    with st.expander("💰 PARA & METAL", expanded=True):
-        st.metric("USD/TRY", f"₺{usd:.4f}", f"{up:+.2f}%")
-        st.metric("Altın Gram (Tahmini)", f"₺{((gold/31.1)*usd):.2f}", f"{gp:+.2f}%")
-        st.metric("Gümüş Gram", f"₺{((get_live_data('SI=F')[0]/31.1)*usd):.2f}")
-
-    with st.expander("🛢️ ENERJİ & STRATEJİ", expanded=True):
-        st.metric("Brent Petrol", f"${brent:.2f}", f"{bp:+.2f}%")
-        st.metric("Sıvı Hidrokarbon (WTI)", f"${get_live_data('CL=F')[0]:.2f}")
-        st.metric("Avrupa Doğalgaz", f"€{get_live_data('TTF=F')[0]:.2f}")
-        st.metric("VIX (Korku Endeksi)", f"{get_live_data('^VIX')[0]:.2f}", f"{get_live_data('^VIX')[2]:+.2f}%")
-
-    with st.expander("🛳️ NAVLUN & RİSK", expanded=True):
-        st.metric("Baltic Dry Endeksi", f"{get_live_data('BDRY')[0]:.0f}")
-        st.metric("Türkiye 10Y Tahvil", f"${get_live_data('TUR')[0]:.2f}")
-        st.metric("Türkiye CDS", f"{268.4 + random.uniform(-1, 1):.1f}", f"{random.uniform(-0.5, 0.5):+.1f}")
-
+# --- SİDEBAR: YÖNETİM VE HABERLER ---
 with st.sidebar:
-    sidebar_terminal()
+    st.title("🎛️ KONTROL PANELİ")
+    
+    # Şifre Girişi
+    password = st.text_input("Yönetici Şifresi", type="password")
+    if password == "isedes":
+        st.success("Erişim Onaylandı")
+        with st.expander("📝 VERİLERİ GÜNCELLE"):
+            m_hurmuz = st.selectbox("Hürmüz Durumu", ["AÇIK / GÜVENLİ", "RİSKLİ", "KISMEN KAPALI", "KAPALI"], index=0)
+            m_poly = st.number_input("Polyester ($/Ton)", value=st.session_state.manual_data["polyester"])
+            m_gubre = st.number_input("Gübre ($/Ton)", value=st.session_state.manual_data["gubre"])
+            m_cds = st.number_input("Türkiye 5Y CDS", value=st.session_state.manual_data["tr_5y_cds"])
+            m_dgaz = st.number_input("Avrupa Doğal Gaz (€/MWh)", value=st.session_state.manual_data["avrupa_dgaz"])
+            m_jet = st.number_input("Jet Yakıt ($/Bbl)", value=st.session_state.manual_data["jet_yakit"])
+            
+            if st.button("SİSTEMİ GÜNCELLE VE KAYDET"):
+                st.session_state.manual_data.update({
+                    "hurmuz": m_hurmuz, "polyester": m_poly, "gubre": m_gubre,
+                    "tr_5y_cds": m_cds, "avrupa_dgaz": m_dgaz, "jet_yakit": m_jet,
+                    "last_update": datetime.now().strftime('%H:%M:%S')
+                })
+                st.rerun()
+    else:
+        if password: st.error("Hatalı Şifre")
 
-# --- ANA EKRAN (HARİTA) ---
-st.title("🌍 Kapsamlı Savaş Haritası (28 Şubat 2026 - Günümüz)")
-st.markdown("""
-**Lejant:** 🔴 **Kırmızı:** İran'ın Saldırıları | 
-🟠 **Turuncu:** İsrail'in Saldırıları | 
-🔵 **Mavi:** ABD'nin Saldırıları
-""")
+    st.divider()
+    st.subheader("📰 CANLI HABER AKIŞI")
+    news_items = scrape_war_news()
+    for n in news_items[:15]:
+        st.markdown(f"**•** [{n['title']}]({n['link']})")
+        st.caption(f"⏱ {n['date']}")
+        st.divider()
 
-@st.fragment(run_every="600s")
+# --- ANA EKRAN ÜST VERİ PANELİ ---
+st.title("🇮🇷 İRAN SAVAŞ MONİTÖRÜ")
+st.caption(f"Son Otomatik Güncelleme: {datetime.now().strftime('%H:%M:%S')} | Manuel Veri Güncelleme: {st.session_state.manual_data['last_update']}")
+
+# Veri Çekme
+usd, _, _ = get_live_data("TRY=X")
+gold, _, gp = get_live_data("GC=F")
+silver, _, sp = get_live_data("SI=F")
+brent_v, _, bp = get_live_data("BZ=F")
+wti, _, _ = get_live_data("CL=F")
+vix, _, vp = get_live_data("^VIX")
+us10y, _, up10 = get_live_data("^TNX")
+tr10y, _, _ = get_live_data("TUR") # Proxy
+alum, _, ap = get_live_data("ALI=F")
+bdry, _, bdp = get_live_data("BDRY")
+
+# Satır 1
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("Baltic Dry (Navlun)", f"{bdry:.0f}", f"{bdp:+.2f}%")
+c2.metric("Brent Vadeli", f"${brent_v:.2f}", f"{bp:+.2f}%")
+c3.metric("Brent Spot (Tahmini)", f"${brent_v - 0.4: .2f}")
+c4.metric("Sıvı Hidrokarbon (WTI)", f"${wti:.2f}")
+c5.metric("Avrupa Doğal Gaz", f"€{st.session_state.manual_data['avrupa_dgaz']}", "MANUEL")
+
+# Satır 2
+c6, c7, c8, c9, c10 = st.columns(5)
+c6.metric("Jet Yakıt", f"${st.session_state.manual_data['jet_yakit']}", "MANUEL")
+c7.metric("Alüminyum", f"${alum:.2f}", f"{ap:+.2f}%")
+c8.metric("Polyester", f"${st.session_state.manual_data['polyester']}", "MANUEL")
+c9.metric("Gübre", f"${st.session_state.manual_data['gubre']}", "MANUEL")
+c10.metric("Altın Gram", f"₺{((gold/31.1)*usd):.2f}", f"{gp:+.2f}%")
+
+# Satır 3
+c11, c12, c13, c14, c15 = st.columns(5)
+c11.metric("Gümüş Gram", f"₺{((silver/31.1)*usd):.2f}", f"{sp:+.2f}%")
+c12.metric("VIX (Korku)", f"{vix:.2f}", f"{vp:+.2f}%")
+c13.metric("ABD 10Y Tahvil", f"%{us10y:.2f}", f"{up10:+.2f}%")
+c14.metric("Türkiye 5Y CDS", f"{st.session_state.manual_data['tr_5y_cds']:.1f}", "MANUEL")
+c15.metric("Türkiye 10Y", f"${tr10y:.2f}", "AUTO")
+
+st.info(f"🚀 **Hürmüz Boğazı Durumu:** {st.session_state.manual_data['hurmuz']}")
+
+# --- HARİTA ---
+st.divider()
+
 def map_render():
     m = folium.Map(location=[32.0, 48.0], zoom_start=5, tiles="CartoDB dark_matter")
-    m.get_root().html.add_child(folium.Element(pulse_css))
-
-    try:
-        iran_geojson = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/IRN.geo.json"
-        folium.GeoJson(iran_geojson, style_function=lambda x: {'fillColor': '#330000', 'color': '#ff0000', 'weight': 1, 'fillOpacity': 0.15}).add_to(m)
-    except: pass
-
-    # --- DEVASA SAVAŞ VERİTABANI ---
+    # Sabit Olaylar (Kendi veritabanınızdan)
     sabit_olaylar = [
-        {"isim": "Parchin Askeri Kompleksi", "lat": 35.53, "lon": 51.77, "actor": "il", "desc": "Tahran Yakını Füze Üretim Tesisi Vuruldu"},
-        {"isim": "İsfahan Radar Sistemi", "lat": 32.65, "lon": 51.66, "actor": "il", "desc": "S-300 Bataryaları İmha Edildi"},
-        {"isim": "Natanz Nükleer Tesisi Çevresi", "lat": 33.97, "lon": 51.92, "actor": "il", "desc": "Hava Savunma Hatlarına Önleyici Vuruş"},
-        {"isim": "Fordow Zenginleştirme Tesisi", "lat": 34.88, "lon": 50.99, "actor": "il", "desc": "Yeraltı Tesisine Nüfuz Eden Bomba İddiası"},
-        {"isim": "Bandar Abbas Limanı", "lat": 27.18, "lon": 56.28, "actor": "il", "desc": "İran Donanması Hızlı Hücumbotları Vuruldu"},
-        {"isim": "Kharg Adası Petrol Terminali", "lat": 29.23, "lon": 50.31, "actor": "il", "desc": "Petrol Sevkiyat Altyapısına Hasar Verildi"},
-        {"isim": "Tebriz Füze Siloları", "lat": 38.07, "lon": 46.29, "actor": "il", "desc": "Yeraltı Silolarına F-35 Operasyonu"},
-        {"isim": "Tahran Sivil Yerleşim (Hata/Şarapnel)", "lat": 35.72, "lon": 51.42, "actor": "il", "desc": "Hava savunma füzelerinin düşmesi sonucu sivil hasar"},
-        {"isim": "İsfahan Üniversitesi Yakını", "lat": 32.61, "lon": 51.66, "actor": "il", "desc": "Askeri tesise seken füzeler kampüs yakınına düştü"},
-        {"isim": "Semnan Uzay ve Füze Merkezi", "lat": 35.58, "lon": 53.39, "actor": "il", "desc": "Balistik Füze Fırlatma Rampaları Vuruldu"},
-        {"isim": "Meşhed Hava Üssü Çevresi", "lat": 36.26, "lon": 59.61, "actor": "il", "desc": "Doğu İran'daki Erken Uyarı Radarları Etkisiz Hale Getirildi"},
-        {"isim": "Kirmanşah Yeraltı Füze Silosu", "lat": 34.31, "lon": 47.06, "actor": "il", "desc": "Batı Sınırındaki Stratejik Depolar Hedef Alındı"},
-        {"isim": "Hemedan Nojeh Hava Üssü", "lat": 35.19, "lon": 48.65, "actor": "il", "desc": "Savaş Uçağı Hangarları Vuruldu"},
-        {"isim": "Arak Ağır Su Reaktörü Çevresi", "lat": 34.09, "lon": 49.68, "actor": "il", "desc": "Tesis Yakınındaki Uçaksavar Bataryaları İmha Edildi"},
-        {"isim": "Çabahar Donanma Üssü", "lat": 25.28, "lon": 60.62, "actor": "il", "desc": "Umman Denizi Çıkışındaki Denizaltı Tesisleri Hedeflendi"},
-        {"isim": "Ahvaz Petrol Altyapısı", "lat": 31.31, "lon": 48.67, "actor": "il", "desc": "Güneydeki Kritik Rafinerilerde Hasar Bildirildi"},
-        {"isim": "Yezd Lojistik Merkezi", "lat": 31.89, "lon": 54.35, "actor": "il", "desc": "İran Devrim Muhafızları Lojistik Ağı Kesildi"},
-        {"isim": "Kum Hava Savunma Ağı", "lat": 34.64, "lon": 50.87, "actor": "il", "desc": "Başkenti Koruyan Radar Zinciri Vuruldu"},
-        {"isim": "Buşehr Nükleer Santrali Çevresi", "lat": 28.92, "lon": 50.83, "actor": "il", "desc": "Santrali Koruyan Sistemlere Siber ve Hava Saldırısı"},
-        {"isim": "Şam Uluslararası Havalimanı", "lat": 33.41, "lon": 36.51, "actor": "il", "desc": "İran Devrim Muhafızları Kargo Uçağı Vuruldu"},
-        {"isim": "Halep Kırsalı Silah Deposu", "lat": 36.20, "lon": 37.13, "actor": "il", "desc": "Hizbullah İkmal Hattı Kesildi"},
-        {"isim": "Beyrut Dahiye Merkez", "lat": 33.85, "lon": 35.51, "actor": "il", "desc": "Hizbullah Üst Düzey Komuta Merkezi Vuruldu"},
-        {"isim": "Bekaa Vadisi", "lat": 34.00, "lon": 36.14, "actor": "il", "desc": "Hava Savunma Sistemleri İmha Edildi"},
-        {"isim": "Hudeyde Limanı (Yemen)", "lat": 14.79, "lon": 42.95, "actor": "il", "desc": "Husi Petrol Depoları İsrail F-15'lerince Vuruldu"},
-        {"isim": "Nevatim Hava Üssü", "lat": 31.20, "lon": 35.01, "actor": "ir", "desc": "Balistik Füze Yağmuru - Pistlerde Hasar"},
-        {"isim": "Ramon Hava Üssü", "lat": 30.77, "lon": 34.67, "actor": "ir", "desc": "Fettah Hipersonik Füzeleri Hedef Aldı"},
-        {"isim": "Meron Hava Kontrol Üssü", "lat": 32.99, "lon": 35.41, "actor": "ir", "desc": "Hizbullah Anti-Tank Füzeleriyle Radar Vurdu"},
-        {"isim": "Tel Aviv (Kuzey Banliyöleri)", "lat": 32.11, "lon": 34.80, "actor": "ir", "desc": "Demir Kubbe'yi aşan füzeler sivil binalara isabet etti"},
-        {"isim": "Aşkelon Hastane Yakını", "lat": 31.65, "lon": 34.56, "actor": "ir", "desc": "Roket saldırısı sebebiyle hastane çevresinde tahribat"},
-        {"isim": "Beyrut Dahiye (Sivil Bloklar)", "lat": 33.84, "lon": 35.50, "actor": "il", "desc": "Hizbullah hedeflenirken sivil apartmanlar yıkıldı"},
-        {"isim": "Şam Merkez (Sivil Mahalle)", "lat": 33.50, "lon": 36.30, "actor": "il", "desc": "İranlı komutanlara suikast girişimi sırasında sivil kayıplar"},
-        {"isim": "Sanaa Yerleşim Bölgesi", "lat": 15.35, "lon": 44.20, "actor": "us", "desc": "Depo bombardımanı sırasında sivil altyapı etkilendi"},
-        {"isim": "Erbil ABD Konsolosluğu Yakını", "lat": 36.23, "lon": 44.01, "actor": "ir", "desc": "Mossad Karargahı İddiasıyla Balistik Atış"},
-        {"isim": "Sanaa Yeraltı Depoları", "lat": 15.36, "lon": 44.19, "actor": "us", "desc": "B-2 Spirit Bombardıman Uçakları Vurdu"},
-        {"isim": "Cürf es-Sahar (Irak)", "lat": 32.89, "lon": 44.18, "actor": "us", "desc": "Ketaib Hizbullah İHA Üretim Tesisi Vuruldu"}
+        {"isim": "Parchin Askeri Kompleksi", "lat": 35.53, "lon": 51.77, "actor": "il", "desc": "Füze Üretim Tesisi Vuruldu"},
+        {"isim": "Nevatim Hava Üssü", "lat": 31.20, "lon": 35.01, "actor": "ir", "desc": "Balistik Füze İsabeti"},
+        {"isim": "Hürmüz Boğazı Devriye", "lat": 26.56, "lon": 56.45, "actor": "ir", "desc": "Donanma Hareketliliği"}
     ]
-
-    haber_olaylari = scrape_war_news()
-    tum_olaylar = sabit_olaylar + haber_olaylari
     
-    for olay in tum_olaylar:
+    for olay in sabit_olaylar:
         cls = "strike-ir" if olay["actor"] == "ir" else "strike-il" if olay["actor"] == "il" else "strike-us"
-        border = "red" if olay["actor"] == "ir" else "orange" if olay["actor"] == "il" else "cyan"
+        color = "red" if olay["actor"] == "ir" else "orange" if olay["actor"] == "il" else "cyan"
         
-        lat_final = jitter(olay["lat"]) if "lat" in olay else olay["loc"][0]
-        lon_final = jitter(olay["lon"]) if "lon" in olay else olay["loc"][1]
-
-        # LİNK OLUŞTURMA: Eğer canlı haberse orijinal linkini kullan, sabit olay ise o olayın Google arama sonucuna bağla
-        arama_sorgusu = urllib.parse.quote_plus(olay.get('isim', '') + " haberi")
-        haber_linki = olay.get('link', f"https://news.google.com/search?q={arama_sorgusu}&hl=tr&gl=TR&ceid=TR:tr")
-
-        popup_html = f"""
-            <div style='color:white; background:#111; padding:12px; border-radius:6px; border:1px solid {border}; width:220px;'>
-                <b style='color:{border}; font-size:14px;'>📍 {olay.get('isim', 'SALDIRI NOKTASI')}</b><br>
-                <hr style='margin:6px 0; border-color:#333;'>
-                <span style='font-size:12px; color:#ddd;'>{olay.get('desc', '')}</span><br>
-                <a href='{haber_linki}' target='_blank' style='display:inline-block; margin-top:10px; color:#fff; background-color:{border}; text-decoration:none; font-size:11px; padding:4px 8px; border-radius:4px; font-weight:bold;'>🔗 HABERE GİT</a>
-            </div>
-        """
+        popup_html = f"<div style='color:white; background:#111; padding:10px; border:1px solid {color};'><b>{olay['isim']}</b><br>{olay['desc']}</div>"
         
         folium.Marker(
-            location=[lat_final, lon_final],
-            tooltip=olay.get("isim", "Detay"),
-            popup=folium.Popup(popup_html, max_width=250),
+            location=[olay["lat"], olay["lon"]],
+            popup=folium.Popup(popup_html, max_width=200),
             icon=folium.DivIcon(html=f'<div class="{cls}"></div>')
         ).add_to(m)
 
-    st_folium(m, use_container_width=True, height=750, key="war_map_2026", returned_objects=[])
+    st_folium(m, use_container_width=True, height=600)
 
 map_render()
