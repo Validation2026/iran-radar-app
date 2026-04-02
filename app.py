@@ -29,7 +29,6 @@ if 'manual_data' not in st.session_state:
         "last_update": datetime.now().strftime('%H:%M:%S')
     }
 else:
-    # Eski session'dan gelen eksik anahtarlar varsa otomatik tamamla (KeyError'u önler)
     anahtarlar = ["jet_yakit", "polyester", "gubre", "tr_5y_cds", "hurmuz"]
     for k in anahtarlar:
         prev_k = f"prev_{k}"
@@ -195,8 +194,8 @@ gold_oz, _, gp = get_market_data("XAUUSD", "forex", "FX_IDC", "GC=F")
 silver_oz, _, sp = get_market_data("XAGUSD", "forex", "FX_IDC", "SI=F")
 brent_v, _, bp = get_market_data("UKOIL", "cfd", "TVC", "BZ=F")
 wti, _, _ = get_market_data("USOIL", "cfd", "TVC", "CL=F")
-ttf_gas, _, ttf_p = get_market_data("TTF1!", "cfd", "ICEEUR", "TTF=F") # Avrupa Doğal Gaz TTF (Otomatik)
-uranium, _, ura_p = get_market_data("UX1!", "cfd", "CME", "UX=F") # Uranyum (Otomatik)
+ttf_gas, _, ttf_p = get_market_data("TTF1!", "cfd", "ICEEUR", "TTF=F") 
+uranium, _, ura_p = get_market_data("UX1!", "cfd", "CME", "UX=F") 
 vix, _, vp = get_market_data("VIX", "america", "CBOE", "^VIX")
 us10y, _, up10 = get_market_data("US10Y", "cfd", "TVC", "^TNX")
 tr10y, _, _ = get_market_data("TR10Y", "cfd", "TVC", "TUR")
@@ -213,29 +212,25 @@ d_poly = calc_delta(st.session_state.manual_data['polyester'], st.session_state.
 d_gubre = calc_delta(st.session_state.manual_data['gubre'], st.session_state.manual_data['prev_gubre'])
 d_cds = calc_delta(st.session_state.manual_data['tr_5y_cds'], st.session_state.manual_data['prev_tr_5y_cds'])
 
-# KARTLAR İÇİN YENİ 4x4 (16 Veri) DÜZENİ
-# Satır 1: Enerji ve Stratejik Yakıtlar
+# KARTLAR İÇİN 4x4 DÜZEN
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Brent Vadeli", f"${brent_v:.2f}", f"{bp:+.2f}%")
 c2.metric("Brent Spot (Tahmini)", f"${brent_v - 0.4: .2f}")
 c3.metric("Sıvı Hidrok. (WTI)", f"${wti:.2f}")
 c4.metric("Avrupa Doğal Gaz", f"€{ttf_gas:.2f}", f"{ttf_p:+.2f}%" if ttf_gas > 0 else "Veri Çekiliyor...")
 
-# Satır 2: Değerli Metaller & Madenler
 c5, c6, c7, c8 = st.columns(4)
 c5.metric("Altın Gram", f"₺{gram_altin:.2f}", f"{gp:+.2f}%")
 c6.metric("Gümüş Gram", f"₺{gram_gumus:.2f}", f"{sp:+.2f}%")
 c7.metric("Alüminyum", f"${alum:.2f}", f"{ap:+.2f}%")
 c8.metric("Uranyum", f"${uranium:.2f}", f"{ura_p:+.2f}%" if uranium > 0 else "Veri Çekiliyor...")
 
-# Satır 3: Navlun & Makro Ekonomik Göstergeler
 c9, c10, c11, c12 = st.columns(4)
 c9.metric("Baltic Dry (Navlun)", f"{bdry:.0f}", f"{bdp:+.2f}%")
 c10.metric("VIX (Korku)", f"{vix:.2f}", f"{vp:+.2f}%")
 c11.metric("ABD 10Y Tahvil", f"%{us10y:.2f}", f"{up10:+.2f}%")
 c12.metric("Türkiye 10Y", f"${tr10y:.2f}", "AUTO")
 
-# Satır 4: Tedarik & Risk (Manuel Kontrol)
 c13, c14, c15, c16 = st.columns(4)
 c13.metric("Jet Yakıt", f"${st.session_state.manual_data['jet_yakit']}", f"{d_jet:+.2f}% (Mnl)")
 c14.metric("Polyester", f"${st.session_state.manual_data['polyester']}", f"{d_poly:+.2f}% (Mnl)")
@@ -250,14 +245,54 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# --- HARİTA ---
-st.divider()
 
+# --- HARİTA BAŞLIĞI VE LEJANT ---
+st.divider()
+st.markdown("""
+### 🗺️ Stratejik Savaş ve Çatışma Haritası
+**LEJANT:** 🔴 **Kırmızı:** İran Saldırıları/Operasyonları | 🟠 **Turuncu:** İsrail Saldırıları/Operasyonları | 🔵 **Mavi:** ABD Saldırıları/Operasyonları  
+🛡️ **Gri Yıldız:** Kritik Askeri Üsler ve Karargahlar
+""")
+
+# --- HARİTA ---
 @st.fragment(run_every="600s")
 def map_render():
     m = folium.Map(location=[32.0, 48.0], zoom_start=5, tiles="CartoDB dark_matter")
     m.get_root().html.add_child(folium.Element(pulse_css))
 
+    # İRAN SINIRLARINI ÇİZ (GeoJSON)
+    try:
+        iran_geojson = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/IRN.geo.json"
+        folium.GeoJson(
+            iran_geojson,
+            style_function=lambda x: {'fillColor': '#ff0000', 'color': '#ff0000', 'weight': 2, 'fillOpacity': 0.05}
+        ).add_to(m)
+    except:
+        pass
+
+    # ASKERİ ÜSLER
+    askeri_usler = [
+        {"isim": "5. Filo Karargahı (ABD)", "lat": 26.20, "lon": 50.60, "ulke": "ABD"},
+        {"isim": "Al Udeid Hava Üssü (ABD)", "lat": 25.11, "lon": 51.31, "ulke": "ABD"},
+        {"isim": "Al Asad Hava Üssü (ABD)", "lat": 33.79, "lon": 42.43, "ulke": "ABD"},
+        {"isim": "Nevatim Hava Üssü (İsrail)", "lat": 31.20, "lon": 35.01, "ulke": "İsrail"},
+        {"isim": "Hatzerim Hava Üssü (İsrail)", "lat": 31.23, "lon": 34.66, "ulke": "İsrail"},
+        {"isim": "Hayfa Deniz Üssü (İsrail)", "lat": 32.82, "lon": 34.98, "ulke": "İsrail"},
+        {"isim": "İsfahan 8. Taktik Hava Üssü (İran)", "lat": 32.74, "lon": 51.86, "ulke": "İran"},
+        {"isim": "Bender Abbas Deniz Üssü (İran)", "lat": 27.15, "lon": 56.19, "ulke": "İran"},
+        {"isim": "Hamedan Nojeh Hava Üssü (İran)", "lat": 35.20, "lon": 48.65, "ulke": "İran"}
+    ]
+
+    for us in askeri_usler:
+        popup_us_html = f"<div style='color:black; font-weight:bold;'>🛡️ {us['isim']}</div>"
+        folium.Marker(
+            location=[us["lat"], us["lon"]],
+            tooltip=us["isim"],
+            popup=folium.Popup(popup_us_html, max_width=200),
+            icon=folium.Icon(color='lightgray', icon='star')
+        ).add_to(m)
+
+    # SALDIRI VE OLAYLAR
     sabit_olaylar = [
         {"isim": "Parchin Askeri Kompleksi", "lat": 35.53, "lon": 51.77, "actor": "il", "desc": "Tahran Yakını Füze Üretim Tesisi Vuruldu"},
         {"isim": "İsfahan Radar Sistemi", "lat": 32.65, "lon": 51.66, "actor": "il", "desc": "S-300 Bataryaları İmha Edildi"},
