@@ -40,9 +40,15 @@ def calc_delta(current, prev):
     if prev == 0: return 0.0
     return ((current - prev) / prev) * 100
 
-# --- CSS / TAKTİKSEL İKONLAR VE OKUNABİLİRLİK ---
+# --- CSS / ARAYÜZ GİZLEME VE OKUNABİLİRLİK ---
 pulse_css = """
 <style>
+/* STREAMLIT ARAYÜZÜNÜ GİZLEME (Share, Menu, Footer) */
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+.stDeployButton {display: none;}
+
 @keyframes pulse_red {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 0, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);}}
 @keyframes pulse_orange {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 165, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0);}}
 @keyframes pulse_cyan {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(0, 255, 255, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(0, 255, 255, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(0, 255, 255, 0);}}
@@ -75,6 +81,7 @@ st.markdown(pulse_css, unsafe_allow_html=True)
 @st.cache_data(ttl=60)
 def get_market_data(tv_symbol, tv_screener, tv_exchange, yf_ticker):
     try:
+        # Öncelik %100 TradingView
         handler = TA_Handler(symbol=tv_symbol, screener=tv_screener, exchange=tv_exchange, interval=Interval.INTERVAL_1_DAY)
         ind = handler.get_analysis().indicators
         close_price = ind.get("close", 0.0)
@@ -86,6 +93,7 @@ def get_market_data(tv_symbol, tv_screener, tv_exchange, yf_ticker):
     except Exception: pass
     
     try:
+        # Sadece TV hata verirse veya hafta sonu API takılırsa yedek olarak YFinance
         t = yf.Ticker(yf_ticker)
         h = t.history(period="2d")
         if h.empty: return 0.0, 0.0, 0.0
@@ -188,19 +196,19 @@ with st.sidebar:
 st.title("🇮🇷 İRAN SAVAŞ MONİTÖRÜ")
 st.caption(f"Son Otomatik Güncelleme: {datetime.now().strftime('%H:%M:%S')} | Manuel Veri Güncelleme: {st.session_state.manual_data['last_update']}")
 
-# TRADINGVIEW / YFINANCE VERİ ÇEKİMİ
+# TRADINGVIEW OPTİMİZE EDİLMİŞ CANLI VERİLER
 usd_try, _, _ = get_market_data("USDTRY", "forex", "FX_IDC", "TRY=X")
 gold_oz, _, gp = get_market_data("XAUUSD", "forex", "FX_IDC", "GC=F")
 silver_oz, _, sp = get_market_data("XAGUSD", "forex", "FX_IDC", "SI=F")
 brent_v, _, bp = get_market_data("UKOIL", "cfd", "TVC", "BZ=F")
 wti, _, _ = get_market_data("USOIL", "cfd", "TVC", "CL=F")
 ttf_gas, _, ttf_p = get_market_data("TTF1!", "cfd", "ICEEUR", "TTF=F") 
-uranium, _, ura_p = get_market_data("UX1!", "cfd", "CME", "UX=F") 
+uranium, _, ura_p = get_market_data("URA", "america", "AMEX", "URA") # Global X Uranium ETF (Daha sağlıklı veri)
 vix, _, vp = get_market_data("VIX", "america", "CBOE", "^VIX")
 us10y, _, up10 = get_market_data("US10Y", "cfd", "TVC", "^TNX")
 tr10y, _, _ = get_market_data("TR10Y", "cfd", "TVC", "TUR")
 alum, _, ap = get_market_data("ALUMINIUM", "cfd", "TVC", "ALI=F")
-bdry, _, bdp = get_market_data("BDI", "index", "TVC", "BDRY")
+bdry, _, bdp = get_market_data("BDRY", "america", "AMEX", "BDRY") # Navlun için Breakwave Dry Bulk ETF proxy
 
 # Altın/Gümüş Gram Hesaplama
 gram_altin = (gold_oz / 31.1035) * usd_try if usd_try > 0 else 0
@@ -223,10 +231,10 @@ c5, c6, c7, c8 = st.columns(4)
 c5.metric("Altın Gram", f"₺{gram_altin:.2f}", f"{gp:+.2f}%")
 c6.metric("Gümüş Gram", f"₺{gram_gumus:.2f}", f"{sp:+.2f}%")
 c7.metric("Alüminyum", f"${alum:.2f}", f"{ap:+.2f}%")
-c8.metric("Uranyum", f"${uranium:.2f}", f"{ura_p:+.2f}%" if uranium > 0 else "Veri Çekiliyor...")
+c8.metric("Uranyum (ETF Proxy)", f"${uranium:.2f}", f"{ura_p:+.2f}%" if uranium > 0 else "Veri Çekiliyor...")
 
 c9, c10, c11, c12 = st.columns(4)
-c9.metric("Baltic Dry (Navlun)", f"{bdry:.0f}", f"{bdp:+.2f}%")
+c9.metric("Baltic Dry (Navlun Proxy)", f"${bdry:.2f}", f"{bdp:+.2f}%")
 c10.metric("VIX (Korku)", f"{vix:.2f}", f"{vp:+.2f}%")
 c11.metric("ABD 10Y Tahvil", f"%{us10y:.2f}", f"{up10:+.2f}%")
 c12.metric("Türkiye 10Y", f"${tr10y:.2f}", "AUTO")
@@ -244,7 +252,6 @@ st.markdown(f"""
     🚀 HÜRMÜZ BOĞAZI DURUMU: {st.session_state.manual_data['hurmuz']}
 </div>
 """, unsafe_allow_html=True)
-
 
 # --- HARİTA BAŞLIĞI VE LEJANT ---
 st.divider()
