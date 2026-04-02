@@ -12,7 +12,6 @@ import random
 st.set_page_config(layout="wide", page_title="Global OSINT & Market Command", page_icon="🌍", initial_sidebar_state="expanded")
 
 # --- CSS VE ANİMASYONLAR (HARİTA İKONLARI İÇİN) ---
-# Farklı ülkelerin saldırıları ve üsleri için özel parlayan (glowing) ikon tasarımları
 pulse_css = """
 <style>
 @keyframes pulse_red {0% {transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);} 70% {transform: scale(1.2); box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);} 100% {transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);}}
@@ -22,12 +21,12 @@ pulse_css = """
 .icon-iran-strike {width: 18px; height: 18px; background-color: #ff0000; border-radius: 50%; border: 2px solid white; animation: pulse_red 1.5s infinite;}
 .icon-israel-strike {width: 18px; height: 18px; background-color: #ff9900; border-radius: 50%; border: 2px solid white; animation: pulse_orange 1.5s infinite;}
 .icon-us-strike {width: 18px; height: 18px; background-color: #00ffff; border-radius: 50%; border: 2px solid white; animation: pulse_cyan 1.5s infinite;}
-.icon-base {width: 14px; height: 14px; background-color: #aaaaaa; border-radius: 0%; border: 2px solid white;} /* Üsler kare ve sabit */
+.icon-base {width: 14px; height: 14px; background-color: #aaaaaa; border-radius: 0%; border: 2px solid white;}
 </style>
 """
 
 # --- YARDIMCI FONKSİYONLAR ---
-@st.cache_data(ttl=5) # Yahoo verilerini çok hızlı tazeler
+@st.cache_data(ttl=5) 
 def get_finance_data(ticker):
     try:
         t = yf.Ticker(ticker)
@@ -52,16 +51,18 @@ def metric_box(label, symbol, formatter="${:.2f}"):
     c, d, p = get_finance_data(symbol)
     st.metric(label, formatter.format(c), f"{d:+.2f} ({p:+.2f}%)")
 
+
 # --- CANLI PANEL (FRAGMENT: Sadece burası 10 saniyede bir yenilenir, harita donmaz) ---
 @st.fragment(run_every="10s")
 def render_live_sidebar():
-    st.sidebar.title("📟 CANLI TERMİNAL")
-    st.sidebar.caption(f"🔴 CANLI | Son Tik: {datetime.now().strftime('%H:%M:%S')}")
-    st.sidebar.divider()
+    # DİKKAT: Burada st.sidebar KULLANMIYORUZ. Normal st kullanıyoruz.
+    st.title("📟 CANLI TERMİNAL")
+    st.caption(f"🔴 CANLI | Son Tik: {datetime.now().strftime('%H:%M:%S')}")
+    st.divider()
     
     gram_altin, gram_gumus, usd_try = calculate_gram_prices()
 
-    with st.sidebar.expander("🛢️ ENERJİ & NAVLUN", expanded=True):
+    with st.expander("🛢️ ENERJİ & NAVLUN", expanded=True):
         metric_box("Brent Vadeli", "BZ=F")
         metric_box("Brent Spot (Proxy BNO)", "BNO")
         metric_box("Sıvı Hidrokarbon (WTI)", "CL=F")
@@ -69,28 +70,31 @@ def render_live_sidebar():
         metric_box("Jet Yakıtı (Proxy HO)", "HO=F")
         metric_box("Baltic Dry Endeksi", "BDRY", "{:.2f}")
 
-    with st.sidebar.expander("🚢 HÜRMÜZ TRAFİĞİ (Simüle)", expanded=True):
+    with st.expander("🚢 HÜRMÜZ TRAFİĞİ (Simüle)", expanded=True):
         st.metric("⬅️ Batıya Giden Tanker", 14 + random.randint(-1, 1), random.randint(-1, 1))
         st.metric("➡️ Doğuya Giden Tanker", 11 + random.randint(-1, 1), random.randint(-1, 1))
 
-    with st.sidebar.expander("🏗️ ENDÜSTRİYEL & TARIM", expanded=False):
+    with st.expander("🏗️ ENDÜSTRİYEL & TARIM", expanded=False):
         metric_box("Alüminyum", "ALI=F")
         metric_box("Gübre (CF Ind.)", "CF")
         metric_box("Polyester (Celanese Proxy)", "CE")
 
-    with st.sidebar.expander("💰 METALLER & DÖVİZ", expanded=True):
+    with st.expander("💰 METALLER & DÖVİZ", expanded=True):
         st.metric("Altın Gram", f"₺{gram_altin:.2f}")
         st.metric("Gümüş Gram", f"₺{gram_gumus:.2f}")
         metric_box("USD/TRY", "TRY=X", "₺{:.4f}")
 
-    with st.sidebar.expander("🏛️ RİSK & TAHVİL", expanded=True):
+    with st.expander("🏛️ RİSK & TAHVİL", expanded=True):
         metric_box("VIX (Korku Endeksi)", "^VIX", "{:.2f}")
         metric_box("ABD 10Y Tahvil", "^TNX", "%{:.2f}")
         metric_box("Türkiye 10Y (TUR Proxy)", "TUR", "${:.2f}")
         st.metric("Türkiye CDS (Simüle)", f"{265.4 + random.uniform(-2, 2):.1f}", f"{random.uniform(-1, 1):+.1f}")
 
-# Yan menüyü çalıştır
-render_live_sidebar()
+# YAN MENÜYÜ ÇAĞIRMA İŞLEMİ (Doğru Yöntem)
+# Fragment'i Sidebar'ın İÇİNE hapsediyoruz
+with st.sidebar:
+    render_live_sidebar()
+
 
 # --- ANA EKRAN VE HARİTA ---
 st.title("🗺️ Kapsamlı Çatışma ve Strateji Haritası")
@@ -101,7 +105,7 @@ st.markdown("""
 🔵 **Mavi:** ABD'nin Saldırıları
 """)
 
-# Kapsamlı Veritabanı (Senin isteğin üzerine ÇOK SAYIDA nokta eklendi)
+# Kapsamlı Veritabanı
 olaylar_ve_usler = [
     # --- ASKERİ ÜSLER (GRI KARE) ---
     {"isim": "Al Udeid Hava Üssü (Katar)", "lat": 25.11, "lon": 51.31, "tip": "us", "detay": "ABD Merkez Kuvvetler Karargahı"},
@@ -114,7 +118,7 @@ olaylar_ve_usler = [
     {"isim": "İncirlik Hava Üssü (Türkiye)", "lat": 37.00, "lon": 35.42, "tip": "us", "detay": "NATO/ABD Stratejik Üssü"},
     {"isim": "Tartus Deniz Üssü (Suriye)", "lat": 34.91, "lon": 35.88, "tip": "us", "detay": "Rusya ve İran İkmal Noktası"},
 
-    # --- İSRAİL SALDIRILARI (TURUNCU, İRAN'A VE VEKİLLERİNE) ---
+    # --- İSRAİL SALDIRILARI (TURUNCU) ---
     {"isim": "Şam Konsolosluğu Saldırısı", "lat": 33.51, "lon": 36.27, "tip": "israil", "detay": "İranlı Generaller Öldürüldü (1 Nisan 2024)"},
     {"isim": "İsfahan Radar Tesisi", "lat": 32.65, "lon": 51.66, "tip": "israil", "detay": "İran'a ilk doğrudan misilleme (19 Nisan 2024)"},
     {"isim": "Tahran Merkez - Suikast", "lat": 35.68, "lon": 51.38, "tip": "israil", "detay": "İsmail Haniye Suikastı (31 Temmuz 2024)"},
@@ -126,7 +130,7 @@ olaylar_ve_usler = [
     {"isim": "İran Misillemesi - Huzistan", "lat": 31.32, "lon": 48.69, "tip": "israil", "detay": "Ekim 2024 Füze Tesisleri Hedefi"},
     {"isim": "İran Misillemesi - İlam", "lat": 33.63, "lon": 46.42, "tip": "israil", "detay": "Ekim 2024 Radar ve Savunma Sistemleri"},
 
-    # --- İRAN SALDIRILARI (KIRMIZI, İSRAİL VE DİĞERLERİNE) ---
+    # --- İRAN SALDIRILARI (KIRMIZI) ---
     {"isim": "Gerçek Vaat Operasyonu (Golan)", "lat": 33.01, "lon": 35.75, "tip": "iran", "detay": "Nisan 2024 İHA ve Füze Dalgaları"},
     {"isim": "Nevatim Üssü Balistik Saldırı", "lat": 31.21, "lon": 35.00, "tip": "iran", "detay": "Nisan ve Ekim 2024 Balistik Füze Hedefi"},
     {"isim": "Tel Aviv Mossad Yakını", "lat": 32.14, "lon": 34.82, "tip": "iran", "detay": "Ekim 2024 Balistik Füze Dalgaları"},
@@ -134,7 +138,7 @@ olaylar_ve_usler = [
     {"isim": "Panjgur (Pakistan)", "lat": 26.97, "lon": 64.09, "tip": "iran", "detay": "Ocak 2024 Ceyşu'l Adl hedefleri"},
     {"isim": "Kızıldeniz Ticari Gemi Vurulması", "lat": 15.50, "lon": 41.50, "tip": "iran", "detay": "İran Destekli Husi Saldırıları (Sürekli)"},
 
-    # --- ABD SALDIRILARI (MAVİ, İRAN VEKİLLERİNE) ---
+    # --- ABD SALDIRILARI (MAVİ) ---
     {"isim": "Sanaa (Yemen) Bombardımanı", "lat": 15.36, "lon": 44.19, "tip": "abd", "detay": "ABD ve İngiltere koalisyon saldırısı (Ocak/Şubat 2024)"},
     {"isim": "Al-Qaim (Irak)", "lat": 34.03, "lon": 41.14, "tip": "abd", "detay": "Ketaib Hizbullah tesisleri vuruldu (Şubat 2024)"},
     {"isim": "Akashat (Irak)", "lat": 33.38, "lon": 39.98, "tip": "abd", "detay": "İran bağlantılı milis lojistik merkezi"},
