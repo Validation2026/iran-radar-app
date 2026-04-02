@@ -188,6 +188,7 @@ def map_render():
         ).add_to(m)
 
     # DİKKAT: 'key' parametresi haritayı iframe içinde kalıcı hale getirir ve titremeyi yok eder!
-    st_folium(m, use_container_width=True, height=750, key="war_map_2026")
+    # DİKKAT: 'returned_objects=[]' parametresi haritanın senin hareketlerinle yenilenmesini (titremesini) tamamen durdurur!
+    st_folium(m, use_container_width=True, height=750, key="war_map_2026", returned_objects=[])
 
 map_render()
