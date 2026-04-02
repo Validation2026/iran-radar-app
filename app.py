@@ -7,6 +7,7 @@ import time
 import feedparser
 from datetime import datetime
 import random
+import urllib.parse
 
 # --- SİSTEM AYARLARI ---
 st.set_page_config(layout="wide", page_title="WAR ROOM 2026 - MAX OSINT", page_icon="⚔️", initial_sidebar_state="expanded")
@@ -41,7 +42,7 @@ def get_live_data(ticker):
 def jitter(val, amount=0.15): 
     return val + random.uniform(-amount, amount)
 
-# --- GELİŞMİŞ HABER TARAYICI (SİVİL HEDEFLER DAHİL EDİLDİ) ---
+# --- GELİŞMİŞ HABER TARAYICI (LİNKLER EKLENDİ) ---
 @st.cache_data(ttl=600)
 def scrape_war_news():
     queries = [
@@ -52,7 +53,7 @@ def scrape_war_news():
     found_strikes = []
     
     geo_db = {
-        # İRAN (Devasa Genişleme)
+        # İRAN
         "Tahran": [35.68, 51.38, "il"], "İsfahan": [32.65, 51.66, "il"], "Natanz": [33.97, 51.92, "il"],
         "Tebriz": [38.07, 46.29, "il"], "Şiraz": [29.59, 52.58, "il"], "Buşehr": [28.92, 50.83, "il"],
         "Kerec": [35.83, 50.99, "il"], "Kum": [34.64, 50.87, "il"], "Ahvaz": [31.31, 48.67, "il"],
@@ -82,7 +83,8 @@ def scrape_war_news():
                         "isim": f"🔴 SON DAKİKA: {city} (Sivil/Askeri)",
                         "lat": jitter(info[0]), "lon": jitter(info[1]),
                         "actor": info[2],
-                        "desc": f"Kaynak: {entry.title}"
+                        "desc": f"Kaynak: {entry.title}",
+                        "link": entry.link # HABERİN LİNKİ BURADA YAKALANIYOR
                     })
                     break 
     return found_strikes
@@ -135,9 +137,8 @@ def map_render():
         folium.GeoJson(iran_geojson, style_function=lambda x: {'fillColor': '#330000', 'color': '#ff0000', 'weight': 1, 'fillOpacity': 0.15}).add_to(m)
     except: pass
 
-    # --- DEVASA SAVAŞ VERİTABANI (İRAN'IN İÇİ DOLDURULDU) ---
+    # --- DEVASA SAVAŞ VERİTABANI ---
     sabit_olaylar = [
-        # İRAN'IN İÇİNDEKİ YENİ/YOĞUN HEDEFLER
         {"isim": "Parchin Askeri Kompleksi", "lat": 35.53, "lon": 51.77, "actor": "il", "desc": "Tahran Yakını Füze Üretim Tesisi Vuruldu"},
         {"isim": "İsfahan Radar Sistemi", "lat": 32.65, "lon": 51.66, "actor": "il", "desc": "S-300 Bataryaları İmha Edildi"},
         {"isim": "Natanz Nükleer Tesisi Çevresi", "lat": 33.97, "lon": 51.92, "actor": "il", "desc": "Hava Savunma Hatlarına Önleyici Vuruş"},
@@ -147,8 +148,6 @@ def map_render():
         {"isim": "Tebriz Füze Siloları", "lat": 38.07, "lon": 46.29, "actor": "il", "desc": "Yeraltı Silolarına F-35 Operasyonu"},
         {"isim": "Tahran Sivil Yerleşim (Hata/Şarapnel)", "lat": 35.72, "lon": 51.42, "actor": "il", "desc": "Hava savunma füzelerinin düşmesi sonucu sivil hasar"},
         {"isim": "İsfahan Üniversitesi Yakını", "lat": 32.61, "lon": 51.66, "actor": "il", "desc": "Askeri tesise seken füzeler kampüs yakınına düştü"},
-        
-        # YENİ EKLENEN İRAN İÇİ HEDEFLER (Haritayı Doldurmak İçin)
         {"isim": "Semnan Uzay ve Füze Merkezi", "lat": 35.58, "lon": 53.39, "actor": "il", "desc": "Balistik Füze Fırlatma Rampaları Vuruldu"},
         {"isim": "Meşhed Hava Üssü Çevresi", "lat": 36.26, "lon": 59.61, "actor": "il", "desc": "Doğu İran'daki Erken Uyarı Radarları Etkisiz Hale Getirildi"},
         {"isim": "Kirmanşah Yeraltı Füze Silosu", "lat": 34.31, "lon": 47.06, "actor": "il", "desc": "Batı Sınırındaki Stratejik Depolar Hedef Alındı"},
@@ -159,8 +158,6 @@ def map_render():
         {"isim": "Yezd Lojistik Merkezi", "lat": 31.89, "lon": 54.35, "actor": "il", "desc": "İran Devrim Muhafızları Lojistik Ağı Kesildi"},
         {"isim": "Kum Hava Savunma Ağı", "lat": 34.64, "lon": 50.87, "actor": "il", "desc": "Başkenti Koruyan Radar Zinciri Vuruldu"},
         {"isim": "Buşehr Nükleer Santrali Çevresi", "lat": 28.92, "lon": 50.83, "actor": "il", "desc": "Santrali Koruyan Sistemlere Siber ve Hava Saldırısı"},
-
-        # İSRAİL, SURİYE, LÜBNAN VE DİĞERLERİ
         {"isim": "Şam Uluslararası Havalimanı", "lat": 33.41, "lon": 36.51, "actor": "il", "desc": "İran Devrim Muhafızları Kargo Uçağı Vuruldu"},
         {"isim": "Halep Kırsalı Silah Deposu", "lat": 36.20, "lon": 37.13, "actor": "il", "desc": "Hizbullah İkmal Hattı Kesildi"},
         {"isim": "Beyrut Dahiye Merkez", "lat": 33.85, "lon": 35.51, "actor": "il", "desc": "Hizbullah Üst Düzey Komuta Merkezi Vuruldu"},
@@ -189,11 +186,16 @@ def map_render():
         lat_final = jitter(olay["lat"]) if "lat" in olay else olay["loc"][0]
         lon_final = jitter(olay["lon"]) if "lon" in olay else olay["loc"][1]
 
+        # LİNK OLUŞTURMA: Eğer canlı haberse orijinal linkini kullan, sabit olay ise o olayın Google arama sonucuna bağla
+        arama_sorgusu = urllib.parse.quote_plus(olay.get('isim', '') + " haberi")
+        haber_linki = olay.get('link', f"https://news.google.com/search?q={arama_sorgusu}&hl=tr&gl=TR&ceid=TR:tr")
+
         popup_html = f"""
-            <div style='color:white; background:#111; padding:10px; border-radius:4px; border:1px solid {border}; width:200px;'>
-                <b style='color:{border}'>📍 {olay.get('isim', 'SALDIRI NOKTASI')}</b><br>
-                <hr style='margin:5px 0; border-color:#333;'>
-                <span style='font-size:12px;'>{olay.get('desc', '')}</span>
+            <div style='color:white; background:#111; padding:12px; border-radius:6px; border:1px solid {border}; width:220px;'>
+                <b style='color:{border}; font-size:14px;'>📍 {olay.get('isim', 'SALDIRI NOKTASI')}</b><br>
+                <hr style='margin:6px 0; border-color:#333;'>
+                <span style='font-size:12px; color:#ddd;'>{olay.get('desc', '')}</span><br>
+                <a href='{haber_linki}' target='_blank' style='display:inline-block; margin-top:10px; color:#fff; background-color:{border}; text-decoration:none; font-size:11px; padding:4px 8px; border-radius:4px; font-weight:bold;'>🔗 HABERE GİT</a>
             </div>
         """
         
