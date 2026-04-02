@@ -9,12 +9,41 @@ from datetime import datetime
 import random
 import urllib.parse
 
-# --- SİSTEM AYARLARI ---
-st.set_page_config(layout="wide", page_title="WAR ROOM 2026 - MAX OSINT", page_icon="⚔️", initial_sidebar_state="expanded")
+# --- SİSTEM AYARLARI (Mobil Uyum İçin 'auto' yapıldı) ---
+st.set_page_config(layout="wide", page_title="WAR ROOM 2026 - TERMINAL", page_icon="⚔️", initial_sidebar_state="auto")
 
-# --- CSS / TAKTİKSEL İKONLAR ---
-pulse_css = """
+# --- GELİŞMİŞ CSS (Arayüz Gizleme, Estetik ve Mobil Uyum) ---
+custom_css = """
 <style>
+/* 1. Streamlit Varsayılan UI Elemanlarını Gizleme (Share, Deploy, Menü, Footer) */
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+.stAppDeployButton {display:none;}
+
+/* 2. Mobil ve Geniş Ekran İçin Boşluk Ayarları */
+.block-container {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+}
+
+/* 3. Terminal Tarzı Estetik Metrik Kutuları (Dolar, Altın vs. için) */
+div[data-testid="stMetric"] {
+    background-color: #161a1e;
+    border: 1px solid #2b3036;
+    padding: 10px 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+    transition: transform 0.2s;
+}
+div[data-testid="stMetric"]:hover {
+    transform: scale(1.02);
+    border-color: #4a5568;
+}
+
+/* 4. Harita Animasyonları */
 @keyframes pulse_red {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 0, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);}}
 @keyframes pulse_orange {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 165, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0);}}
 @keyframes pulse_cyan {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(0, 255, 255, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(0, 255, 255, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(0, 255, 255, 0);}}
@@ -23,9 +52,11 @@ pulse_css = """
 .strike-il {width: 12px; height: 12px; background-color: #ff9900; border-radius: 50%; border: 1.5px solid white; animation: pulse_orange 2.5s infinite;}
 .strike-us {width: 12px; height: 12px; background-color: #00ffff; border-radius: 50%; border: 1.5px solid white; animation: pulse_cyan 2.5s infinite;}
 
-.stFolium { height: 750px !important; }
+/* Harita kutusunun mobil ve webde titremesini önlemek için dinamik yükseklik sabitleme */
+.stFolium { height: 75vh !important; min-height: 600px !important; }
 </style>
 """
+st.markdown(custom_css, unsafe_allow_html=True)
 
 # --- YARDIMCI FONKSİYONLAR ---
 @st.cache_data(ttl=5)
@@ -42,7 +73,7 @@ def get_live_data(ticker):
 def jitter(val, amount=0.15): 
     return val + random.uniform(-amount, amount)
 
-# --- GELİŞMİŞ HABER TARAYICI (LİNKLER EKLENDİ) ---
+# --- GELİŞMİŞ HABER TARAYICI ---
 @st.cache_data(ttl=600)
 def scrape_war_news():
     queries = [
@@ -53,21 +84,16 @@ def scrape_war_news():
     found_strikes = []
     
     geo_db = {
-        # İRAN
         "Tahran": [35.68, 51.38, "il"], "İsfahan": [32.65, 51.66, "il"], "Natanz": [33.97, 51.92, "il"],
         "Tebriz": [38.07, 46.29, "il"], "Şiraz": [29.59, 52.58, "il"], "Buşehr": [28.92, 50.83, "il"],
         "Kerec": [35.83, 50.99, "il"], "Kum": [34.64, 50.87, "il"], "Ahvaz": [31.31, 48.67, "il"],
         "Kirmanşah": [34.31, 47.06, "il"], "Bender Abbas": [27.18, 56.28, "il"], "Parchin": [35.53, 51.77, "il"],
         "Meşhed": [36.26, 59.61, "il"], "Semnan": [35.58, 53.39, "il"], "Arak": [34.09, 49.68, "il"],
         "Çabahar": [25.28, 60.62, "il"], "Hemedan": [35.19, 48.65, "il"], "Yezd": [31.89, 54.35, "il"],
-        
-        # İSRAİL
         "Tel Aviv": [32.08, 34.78, "ir"], "Hayfa": [32.79, 34.98, "ir"], "Eilat": [29.55, 34.95, "ir"],
         "Kudüs": [31.76, 35.21, "ir"], "Negev": [30.80, 34.84, "ir"], "Aşkelon": [31.66, 34.57, "ir"],
         "Aşdod": [31.80, 34.65, "ir"], "Safed": [32.96, 35.49, "ir"], "Netanya": [32.32, 34.85, "ir"],
         "Dimona": [31.07, 35.02, "ir"], "Meron": [32.99, 35.41, "ir"], "Golan": [33.01, 35.75, "ir"],
-        
-        # LÜBNAN & SURİYE & IRAK & YEMEN
         "Beyrut": [33.89, 35.50, "il"], "Dahiye": [33.85, 35.51, "il"], "Baalbek": [34.00, 36.21, "il"],
         "Şam": [33.51, 36.29, "il"], "Halep": [36.20, 37.13, "il"], "Deyrizor": [35.33, 40.14, "us"],
         "Bağdat": [33.31, 44.36, "us"], "Erbil": [36.19, 44.00, "ir"], "Sanaa": [15.36, 44.19, "us"],
@@ -84,7 +110,7 @@ def scrape_war_news():
                         "lat": jitter(info[0]), "lon": jitter(info[1]),
                         "actor": info[2],
                         "desc": f"Kaynak: {entry.title}",
-                        "link": entry.link # HABERİN LİNKİ BURADA YAKALANIYOR
+                        "link": entry.link
                     })
                     break 
     return found_strikes
@@ -130,7 +156,6 @@ st.markdown("""
 @st.fragment(run_every="600s")
 def map_render():
     m = folium.Map(location=[32.0, 48.0], zoom_start=5, tiles="CartoDB dark_matter")
-    m.get_root().html.add_child(folium.Element(pulse_css))
 
     try:
         iran_geojson = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/IRN.geo.json"
@@ -186,7 +211,6 @@ def map_render():
         lat_final = jitter(olay["lat"]) if "lat" in olay else olay["loc"][0]
         lon_final = jitter(olay["lon"]) if "lon" in olay else olay["loc"][1]
 
-        # LİNK OLUŞTURMA: Eğer canlı haberse orijinal linkini kullan, sabit olay ise o olayın Google arama sonucuna bağla
         arama_sorgusu = urllib.parse.quote_plus(olay.get('isim', '') + " haberi")
         haber_linki = olay.get('link', f"https://news.google.com/search?q={arama_sorgusu}&hl=tr&gl=TR&ceid=TR:tr")
 
