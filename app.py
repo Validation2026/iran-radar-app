@@ -13,19 +13,30 @@ from tradingview_ta import TA_Handler, Interval
 # --- SİSTEM AYARLARI ---
 st.set_page_config(layout="wide", page_title="İran Savaş Monitörü", page_icon="⚔️", initial_sidebar_state="expanded")
 
-# --- SESSION STATE (MANUEL VERİLER İÇİN) ---
+# --- SESSION STATE (MANUEL VERİLER VE DEĞİŞİM TAKİBİ İÇİN) ---
 if 'manual_data' not in st.session_state:
     st.session_state.manual_data = {
         "hurmuz": "AÇIK / GÜVENLİ",
+        "prev_hurmuz": "AÇIK / GÜVENLİ",
         "polyester": 1250.0,
+        "prev_polyester": 1250.0,
         "gubre": 480.0,
+        "prev_gubre": 480.0,
         "tr_5y_cds": 265.0,
+        "prev_tr_5y_cds": 265.0,
         "avrupa_dgaz": 32.40,
+        "prev_avrupa_dgaz": 32.40,
         "jet_yakit": 85.20,
+        "prev_jet_yakit": 85.20,
         "last_update": datetime.now().strftime('%H:%M:%S')
     }
 
-# --- CSS / TAKTİKSEL İKONLAR VE OKUNABİLİRLİK DÜZELTMESİ ---
+# Yüzdelik değişim hesaplama fonksiyonu
+def calc_delta(current, prev):
+    if prev == 0: return 0.0
+    return ((current - prev) / prev) * 100
+
+# --- CSS / TAKTİKSEL İKONLAR VE OKUNABİLİRLİK ---
 pulse_css = """
 <style>
 @keyframes pulse_red {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 0, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);}}
@@ -36,7 +47,6 @@ pulse_css = """
 .strike-il {width: 12px; height: 12px; background-color: #ff9900; border-radius: 50%; border: 1.5px solid white; animation: pulse_orange 2.5s infinite;}
 .strike-us {width: 12px; height: 12px; background-color: #00ffff; border-radius: 50%; border: 1.5px solid white; animation: pulse_cyan 2.5s infinite;}
 
-/* Metrik Kartları Okunabilirlik Düzeltmesi */
 [data-testid="stMetric"] { 
     background-color: #1e2126 !important; 
     padding: 15px !important; 
@@ -60,26 +70,17 @@ st.markdown(pulse_css, unsafe_allow_html=True)
 # --- TRADINGVIEW & YFINANCE VERİ ÇEKİCİ ---
 @st.cache_data(ttl=60)
 def get_market_data(tv_symbol, tv_screener, tv_exchange, yf_ticker):
-    # Önce TradingView'dan çekmeyi dener
     try:
-        handler = TA_Handler(
-            symbol=tv_symbol,
-            screener=tv_screener,
-            exchange=tv_exchange,
-            interval=Interval.INTERVAL_1_DAY
-        )
+        handler = TA_Handler(symbol=tv_symbol, screener=tv_screener, exchange=tv_exchange, interval=Interval.INTERVAL_1_DAY)
         ind = handler.get_analysis().indicators
         close_price = ind.get("close", 0.0)
         open_price = ind.get("open", close_price)
-        
         if close_price and close_price > 0:
             change = close_price - open_price
             pct = (change / open_price) * 100 if open_price > 0 else 0.0
             return close_price, change, pct
-    except Exception:
-        pass
+    except Exception: pass
     
-    # TradingView başarısız olursa veya veri eksikse YFinance'a geçer (Yedek)
     try:
         t = yf.Ticker(yf_ticker)
         h = t.history(period="2d")
@@ -88,49 +89,62 @@ def get_market_data(tv_symbol, tv_screener, tv_exchange, yf_ticker):
         d = c - h['Close'].iloc[-2]
         p = (d / h['Close'].iloc[-2]) * 100
         return c, d, p
-    except:
-        return 0.0, 0.0, 0.0
+    except: return 0.0, 0.0, 0.0
 
 def jitter(val, amount=0.15): 
     return val + random.uniform(-amount, amount)
 
-# --- HABER & HARİTA VERİSİ ---
+# --- GELİŞMİŞ HABER TARAYICI (Harita Bozulmadı) ---
 @st.cache_data(ttl=600)
 def scrape_war_news():
     queries = [
         "İran+saldırı", "İsrail+füze+vurdu", "ABD+hava+harekatı", 
-        "İran+okul+vuruldu", "hastane+saldırı", "Şam+bina+vuruldu"
+        "İran+okul+vuruldu", "İran+sivil+bina", "İsrail+yerleşim", 
+        "hastane+saldırı", "Lübnan+sivil+kayıp", "Şam+bina+vuruldu"
     ]
     found_strikes = []
+    all_news_sidebar = []
     
     geo_db = {
+        # İRAN
         "Tahran": [35.68, 51.38, "il"], "İsfahan": [32.65, 51.66, "il"], "Natanz": [33.97, 51.92, "il"],
-        "Şiraz": [29.59, 52.58, "il"], "Kerec": [35.83, 50.99, "il"], "Kum": [34.64, 50.87, "il"],
-        "Tel Aviv": [32.08, 34.78, "ir"], "Hayfa": [32.79, 34.98, "ir"], "Kudüs": [31.76, 35.21, "ir"],
-        "Beyrut": [33.89, 35.50, "il"], "Şam": [33.51, 36.29, "il"], "Sanaa": [15.36, 44.19, "us"]
+        "Tebriz": [38.07, 46.29, "il"], "Şiraz": [29.59, 52.58, "il"], "Buşehr": [28.92, 50.83, "il"],
+        "Kerec": [35.83, 50.99, "il"], "Kum": [34.64, 50.87, "il"], "Ahvaz": [31.31, 48.67, "il"],
+        "Kirmanşah": [34.31, 47.06, "il"], "Bender Abbas": [27.18, 56.28, "il"], "Parchin": [35.53, 51.77, "il"],
+        "Meşhed": [36.26, 59.61, "il"], "Semnan": [35.58, 53.39, "il"], "Arak": [34.09, 49.68, "il"],
+        "Çabahar": [25.28, 60.62, "il"], "Hemedan": [35.19, 48.65, "il"], "Yezd": [31.89, 54.35, "il"],
+        
+        # İSRAİL
+        "Tel Aviv": [32.08, 34.78, "ir"], "Hayfa": [32.79, 34.98, "ir"], "Eilat": [29.55, 34.95, "ir"],
+        "Kudüs": [31.76, 35.21, "ir"], "Negev": [30.80, 34.84, "ir"], "Aşkelon": [31.66, 34.57, "ir"],
+        "Aşdod": [31.80, 34.65, "ir"], "Safed": [32.96, 35.49, "ir"], "Netanya": [32.32, 34.85, "ir"],
+        "Dimona": [31.07, 35.02, "ir"], "Meron": [32.99, 35.41, "ir"], "Golan": [33.01, 35.75, "ir"],
+        
+        # LÜBNAN & SURİYE & IRAK & YEMEN
+        "Beyrut": [33.89, 35.50, "il"], "Dahiye": [33.85, 35.51, "il"], "Baalbek": [34.00, 36.21, "il"],
+        "Şam": [33.51, 36.29, "il"], "Halep": [36.20, 37.13, "il"], "Deyrizor": [35.33, 40.14, "us"],
+        "Bağdat": [33.31, 44.36, "us"], "Erbil": [36.19, 44.00, "ir"], "Sanaa": [15.36, 44.19, "us"],
+        "Hudeyde": [14.79, 42.95, "il"], "Hürmüz": [26.56, 56.45, "ir"]
     }
 
-    all_news_sidebar = []
-
     for q in queries:
-        feed = feedparser.parse(f"https://news.google.com/rss/search?q={q}&hl=tr&gl=TR&ceid=TR:tr")
-        for entry in feed.entries[:10]:
-            # Harita için konum kontrolü
+        feed = feedparser.parse(f"https://news.google.com/rss/search?q={q}+after:2026-02-27&hl=tr&gl=TR&ceid=TR:tr")
+        for entry in feed.entries[:25]:
+            # Sidebar için haber akışına ekle
+            if entry.title not in [n["title"] for n in all_news_sidebar]:
+                all_news_sidebar.append({"title": entry.title, "link": entry.link, "date": entry.published})
+
+            # Harita için şehir eşleşmesi ara
             for city, info in geo_db.items():
                 if city.lower() in entry.title.lower():
                     found_strikes.append({
-                        "isim": f"🔴 SON DAKİKA: {city} (Haber Tespiti)",
+                        "isim": f"🔴 SON DAKİKA: {city} (Sivil/Askeri)",
                         "lat": jitter(info[0]), "lon": jitter(info[1]),
                         "actor": info[2],
                         "desc": f"Kaynak: {entry.title}",
-                        "link": entry.link
+                        "link": entry.link 
                     })
-                    break
-            
-            # Sidebar haberleri için
-            if entry.title not in [n["title"] for n in all_news_sidebar]:
-                all_news_sidebar.append({"title": entry.title, "link": entry.link, "date": entry.published})
-                
+                    break 
     return found_strikes, all_news_sidebar
 
 # --- SİDEBAR: YÖNETİM VE HABERLER ---
@@ -151,6 +165,15 @@ with st.sidebar:
             m_jet = st.number_input("Jet Yakıt ($/Bbl)", value=st.session_state.manual_data["jet_yakit"])
             
             if st.button("SİSTEMİ GÜNCELLE VE KAYDET"):
+                # Mevcut verileri 'prev' (önceki) olarak kaydet
+                st.session_state.manual_data["prev_hurmuz"] = st.session_state.manual_data["hurmuz"]
+                st.session_state.manual_data["prev_polyester"] = st.session_state.manual_data["polyester"]
+                st.session_state.manual_data["prev_gubre"] = st.session_state.manual_data["gubre"]
+                st.session_state.manual_data["prev_tr_5y_cds"] = st.session_state.manual_data["tr_5y_cds"]
+                st.session_state.manual_data["prev_avrupa_dgaz"] = st.session_state.manual_data["avrupa_dgaz"]
+                st.session_state.manual_data["prev_jet_yakit"] = st.session_state.manual_data["jet_yakit"]
+                
+                # Yeni verileri ata
                 st.session_state.manual_data.update({
                     "hurmuz": m_hurmuz, "polyester": m_poly, "gubre": m_gubre,
                     "tr_5y_cds": m_cds, "avrupa_dgaz": m_dgaz, "jet_yakit": m_jet,
@@ -178,13 +201,20 @@ brent_v, _, bp = get_market_data("UKOIL", "cfd", "TVC", "BZ=F")
 wti, _, _ = get_market_data("USOIL", "cfd", "TVC", "CL=F")
 vix, _, vp = get_market_data("VIX", "america", "CBOE", "^VIX")
 us10y, _, up10 = get_market_data("US10Y", "cfd", "TVC", "^TNX")
-tr10y, _, _ = get_market_data("TR10Y", "cfd", "TVC", "TUR") # TVC TR10Y bulamazsa YF TUR ETF'ini çeker
+tr10y, _, _ = get_market_data("TR10Y", "cfd", "TVC", "TUR")
 alum, _, ap = get_market_data("ALUMINIUM", "cfd", "TVC", "ALI=F")
-bdry, _, bdp = get_market_data("BDI", "index", "TVC", "BDRY") # Navlun için INDEX 
+bdry, _, bdp = get_market_data("BDI", "index", "TVC", "BDRY")
 
-# Altın/Gümüş Gram Hesaplama (Ons Fiyatı / 31.1035 * Kur)
+# Altın/Gümüş Gram Hesaplama
 gram_altin = (gold_oz / 31.1035) * usd_try if usd_try > 0 else 0
 gram_gumus = (silver_oz / 31.1035) * usd_try if usd_try > 0 else 0
+
+# Manuel Veriler İçin Değişim (Delta) Hesaplamaları
+d_dgaz = calc_delta(st.session_state.manual_data['avrupa_dgaz'], st.session_state.manual_data['prev_avrupa_dgaz'])
+d_jet = calc_delta(st.session_state.manual_data['jet_yakit'], st.session_state.manual_data['prev_jet_yakit'])
+d_poly = calc_delta(st.session_state.manual_data['polyester'], st.session_state.manual_data['prev_polyester'])
+d_gubre = calc_delta(st.session_state.manual_data['gubre'], st.session_state.manual_data['prev_gubre'])
+d_cds = calc_delta(st.session_state.manual_data['tr_5y_cds'], st.session_state.manual_data['prev_tr_5y_cds'])
 
 # Satır 1
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -192,14 +222,14 @@ c1.metric("Baltic Dry (Navlun)", f"{bdry:.0f}", f"{bdp:+.2f}%")
 c2.metric("Brent Vadeli", f"${brent_v:.2f}", f"{bp:+.2f}%")
 c3.metric("Brent Spot (Tahmini)", f"${brent_v - 0.4: .2f}")
 c4.metric("Sıvı Hidrokarbon (WTI)", f"${wti:.2f}")
-c5.metric("Avrupa Doğal Gaz", f"€{st.session_state.manual_data['avrupa_dgaz']}", "MANUEL")
+c5.metric("Avrupa Doğal Gaz", f"€{st.session_state.manual_data['avrupa_dgaz']}", f"{d_dgaz:+.2f}% (Mnl)")
 
 # Satır 2
 c6, c7, c8, c9, c10 = st.columns(5)
-c6.metric("Jet Yakıt", f"${st.session_state.manual_data['jet_yakit']}", "MANUEL")
+c6.metric("Jet Yakıt", f"${st.session_state.manual_data['jet_yakit']}", f"{d_jet:+.2f}% (Mnl)")
 c7.metric("Alüminyum", f"${alum:.2f}", f"{ap:+.2f}%")
-c8.metric("Polyester", f"${st.session_state.manual_data['polyester']}", "MANUEL")
-c9.metric("Gübre", f"${st.session_state.manual_data['gubre']}", "MANUEL")
+c8.metric("Polyester", f"${st.session_state.manual_data['polyester']}", f"{d_poly:+.2f}% (Mnl)")
+c9.metric("Gübre", f"${st.session_state.manual_data['gubre']}", f"{d_gubre:+.2f}% (Mnl)")
 c10.metric("Altın Gram", f"₺{gram_altin:.2f}", f"{gp:+.2f}%")
 
 # Satır 3
@@ -207,7 +237,7 @@ c11, c12, c13, c14, c15 = st.columns(5)
 c11.metric("Gümüş Gram", f"₺{gram_gumus:.2f}", f"{sp:+.2f}%")
 c12.metric("VIX (Korku)", f"{vix:.2f}", f"{vp:+.2f}%")
 c13.metric("ABD 10Y Tahvil", f"%{us10y:.2f}", f"{up10:+.2f}%")
-c14.metric("Türkiye 5Y CDS", f"{st.session_state.manual_data['tr_5y_cds']:.1f}", "MANUEL")
+c14.metric("Türkiye 5Y CDS", f"{st.session_state.manual_data['tr_5y_cds']:.1f}", f"{d_cds:+.2f}% (Mnl)")
 c15.metric("Türkiye 10Y", f"${tr10y:.2f}", "AUTO")
 
 # Hürmüz Durumu Bildirimi
@@ -226,7 +256,6 @@ def map_render():
     m = folium.Map(location=[32.0, 48.0], zoom_start=5, tiles="CartoDB dark_matter")
     m.get_root().html.add_child(folium.Element(pulse_css))
 
-    # Genişletilmiş Sabit Olaylar Listesi (İlk tasarımdaki gibi)
     sabit_olaylar = [
         {"isim": "Parchin Askeri Kompleksi", "lat": 35.53, "lon": 51.77, "actor": "il", "desc": "Tahran Yakını Füze Üretim Tesisi Vuruldu"},
         {"isim": "İsfahan Radar Sistemi", "lat": 32.65, "lon": 51.66, "actor": "il", "desc": "S-300 Bataryaları İmha Edildi"},
