@@ -8,6 +8,8 @@ import feedparser
 from datetime import datetime
 import random
 import urllib.parse
+import urllib.request
+import re
 from tradingview_ta import TA_Handler, Interval
 
 # --- SİSTEM AYARLARI ---
@@ -81,7 +83,6 @@ st.markdown(pulse_css, unsafe_allow_html=True)
 @st.cache_data(ttl=60)
 def get_market_data(tv_symbol, tv_screener, tv_exchange, yf_ticker):
     try:
-        # Öncelik %100 TradingView
         handler = TA_Handler(symbol=tv_symbol, screener=tv_screener, exchange=tv_exchange, interval=Interval.INTERVAL_1_DAY)
         ind = handler.get_analysis().indicators
         close_price = ind.get("close", 0.0)
@@ -93,7 +94,6 @@ def get_market_data(tv_symbol, tv_screener, tv_exchange, yf_ticker):
     except Exception: pass
     
     try:
-        # Sadece TV hata verirse veya hafta sonu API takılırsa yedek olarak YFinance
         t = yf.Ticker(yf_ticker)
         h = t.history(period="2d")
         if h.empty: return 0.0, 0.0, 0.0
@@ -102,6 +102,36 @@ def get_market_data(tv_symbol, tv_screener, tv_exchange, yf_ticker):
         p = (d / h['Close'].iloc[-2]) * 100
         return c, d, p
     except: return 0.0, 0.0, 0.0
+
+# --- TRADING ECONOMICS URANYUM ÖZEL ÇEKİCİ ---
+@st.cache_data(ttl=600)
+def get_uranium_data():
+    try:
+        # Siteyi kandırmak için bir tarayıcı kimliği kullanıyoruz
+        req = urllib.request.Request(
+            "https://tradingeconomics.com/commodity/uranium", 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        )
+        html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8')
+        
+        # Metnin içinden fiyatı bul ("84.30 USD/Lbs")
+        price_match = re.search(r'([0-9.]+)\s+USD/Lbs', html)
+        if price_match:
+            price = float(price_match.group(1))
+            
+            # Aynı metinden yüzde değişimini bul ("up 0.18%" veya "down 0.18%")
+            pct_match = re.search(r'(up|down)\s+([0-9.]+)%', html)
+            pct = 0.0
+            if pct_match:
+                pct_val = float(pct_match.group(2))
+                pct = pct_val if pct_match.group(1) == 'up' else -pct_val
+                
+            return price, 0.0, pct
+    except:
+        pass
+    
+    # TE Sitesi engellerse sistem çökmesin diye yedek ETF (Global X Uranium) devreye girer
+    return get_market_data("URA", "america", "AMEX", "URA")
 
 def jitter(val, amount=0.15): 
     return val + random.uniform(-amount, amount)
@@ -196,19 +226,19 @@ with st.sidebar:
 st.title("🇮🇷 İRAN SAVAŞ MONİTÖRÜ")
 st.caption(f"Son Otomatik Güncelleme: {datetime.now().strftime('%H:%M:%S')} | Manuel Veri Güncelleme: {st.session_state.manual_data['last_update']}")
 
-# TRADINGVIEW OPTİMİZE EDİLMİŞ CANLI VERİLER
+# TRADINGVIEW / ÖZEL API CANLI VERİLERİ
 usd_try, _, _ = get_market_data("USDTRY", "forex", "FX_IDC", "TRY=X")
 gold_oz, _, gp = get_market_data("XAUUSD", "forex", "FX_IDC", "GC=F")
 silver_oz, _, sp = get_market_data("XAGUSD", "forex", "FX_IDC", "SI=F")
 brent_v, _, bp = get_market_data("UKOIL", "cfd", "TVC", "BZ=F")
 wti, _, _ = get_market_data("USOIL", "cfd", "TVC", "CL=F")
 ttf_gas, _, ttf_p = get_market_data("TTF1!", "cfd", "ICEEUR", "TTF=F") 
-uranium, _, ura_p = get_market_data("URA", "america", "AMEX", "URA") # Global X Uranium ETF (Daha sağlıklı veri)
+uranium, _, ura_p = get_uranium_data() # Yeni TE URANYUM Fonksiyonu
 vix, _, vp = get_market_data("VIX", "america", "CBOE", "^VIX")
 us10y, _, up10 = get_market_data("US10Y", "cfd", "TVC", "^TNX")
 tr10y, _, _ = get_market_data("TR10Y", "cfd", "TVC", "TUR")
 alum, _, ap = get_market_data("ALUMINIUM", "cfd", "TVC", "ALI=F")
-bdry, _, bdp = get_market_data("BDRY", "america", "AMEX", "BDRY") # Navlun için Breakwave Dry Bulk ETF proxy
+bdry, _, bdp = get_market_data("BDRY", "america", "AMEX", "BDRY") 
 
 # Altın/Gümüş Gram Hesaplama
 gram_altin = (gold_oz / 31.1035) * usd_try if usd_try > 0 else 0
@@ -231,7 +261,7 @@ c5, c6, c7, c8 = st.columns(4)
 c5.metric("Altın Gram", f"₺{gram_altin:.2f}", f"{gp:+.2f}%")
 c6.metric("Gümüş Gram", f"₺{gram_gumus:.2f}", f"{sp:+.2f}%")
 c7.metric("Alüminyum", f"${alum:.2f}", f"{ap:+.2f}%")
-c8.metric("Uranyum (ETF Proxy)", f"${uranium:.2f}", f"{ura_p:+.2f}%" if uranium > 0 else "Veri Çekiliyor...")
+c8.metric("Uranyum", f"${uranium:.2f}", f"{ura_p:+.2f}%" if uranium > 0 else "Veri Çekiliyor...")
 
 c9, c10, c11, c12 = st.columns(4)
 c9.metric("Baltic Dry (Navlun Proxy)", f"${bdry:.2f}", f"{bdp:+.2f}%")
