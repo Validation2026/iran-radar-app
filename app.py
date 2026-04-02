@@ -30,6 +30,13 @@ if 'manual_data' not in st.session_state:
         "prev_jet_yakit": 85.20,
         "last_update": datetime.now().strftime('%H:%M:%S')
     }
+else:
+    # Eski session'dan gelen eksik anahtarlar varsa otomatik tamamla (KeyError'u önler)
+    anahtarlar = ["avrupa_dgaz", "jet_yakit", "polyester", "gubre", "tr_5y_cds", "hurmuz"]
+    for k in anahtarlar:
+        prev_k = f"prev_{k}"
+        if prev_k not in st.session_state.manual_data:
+            st.session_state.manual_data[prev_k] = st.session_state.manual_data.get(k)
 
 # Yüzdelik değişim hesaplama fonksiyonu
 def calc_delta(current, prev):
