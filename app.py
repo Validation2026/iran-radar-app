@@ -11,8 +11,7 @@ import random
 # --- SİSTEM AYARLARI ---
 st.set_page_config(layout="wide", page_title="WAR ROOM 2026 - MAX OSINT", page_icon="⚔️", initial_sidebar_state="expanded")
 
-# --- CSS / TAKTİKSEL İKONLAR (ZARİFLEŞTİRİLDİ) ---
-# İkon boyutları küçültüldü (12px) ve yanıp sönme efekti daha yavaş, daha az göz yoran (scale 1.2 ve 2.5 saniye) hale getirildi.
+# --- CSS / TAKTİKSEL İKONLAR ---
 pulse_css = """
 <style>
 @keyframes pulse_red {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 0, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);}}
@@ -23,7 +22,6 @@ pulse_css = """
 .strike-il {width: 12px; height: 12px; background-color: #ff9900; border-radius: 50%; border: 1.5px solid white; animation: pulse_orange 2.5s infinite;}
 .strike-us {width: 12px; height: 12px; background-color: #00ffff; border-radius: 50%; border: 1.5px solid white; animation: pulse_cyan 2.5s infinite;}
 
-/* Harita kutusunun titremesini önlemek için yükseklik sabitleme */
 .stFolium { height: 750px !important; }
 </style>
 """
@@ -46,7 +44,6 @@ def jitter(val, amount=0.15):
 # --- GELİŞMİŞ HABER TARAYICI (SİVİL HEDEFLER DAHİL EDİLDİ) ---
 @st.cache_data(ttl=600)
 def scrape_war_news():
-    # Sivil, okul, hastane, bina gibi terimler eklendi
     queries = [
         "İran+saldırı", "İsrail+füze+vurdu", "ABD+hava+harekatı", 
         "İran+okul+vuruldu", "İran+sivil+bina", "İsrail+yerleşim", 
@@ -55,11 +52,13 @@ def scrape_war_news():
     found_strikes = []
     
     geo_db = {
-        # İRAN
+        # İRAN (Devasa Genişleme)
         "Tahran": [35.68, 51.38, "il"], "İsfahan": [32.65, 51.66, "il"], "Natanz": [33.97, 51.92, "il"],
         "Tebriz": [38.07, 46.29, "il"], "Şiraz": [29.59, 52.58, "il"], "Buşehr": [28.92, 50.83, "il"],
         "Kerec": [35.83, 50.99, "il"], "Kum": [34.64, 50.87, "il"], "Ahvaz": [31.31, 48.67, "il"],
         "Kirmanşah": [34.31, 47.06, "il"], "Bender Abbas": [27.18, 56.28, "il"], "Parchin": [35.53, 51.77, "il"],
+        "Meşhed": [36.26, 59.61, "il"], "Semnan": [35.58, 53.39, "il"], "Arak": [34.09, 49.68, "il"],
+        "Çabahar": [25.28, 60.62, "il"], "Hemedan": [35.19, 48.65, "il"], "Yezd": [31.89, 54.35, "il"],
         
         # İSRAİL
         "Tel Aviv": [32.08, 34.78, "ir"], "Hayfa": [32.79, 34.98, "ir"], "Eilat": [29.55, 34.95, "ir"],
@@ -67,21 +66,11 @@ def scrape_war_news():
         "Aşdod": [31.80, 34.65, "ir"], "Safed": [32.96, 35.49, "ir"], "Netanya": [32.32, 34.85, "ir"],
         "Dimona": [31.07, 35.02, "ir"], "Meron": [32.99, 35.41, "ir"], "Golan": [33.01, 35.75, "ir"],
         
-        # LÜBNAN
+        # LÜBNAN & SURİYE & IRAK & YEMEN
         "Beyrut": [33.89, 35.50, "il"], "Dahiye": [33.85, 35.51, "il"], "Baalbek": [34.00, 36.21, "il"],
-        "Sur": [33.27, 35.20, "il"], "Sayda": [33.56, 35.37, "il"], "Nebatiye": [33.37, 35.48, "il"],
-        
-        # SURİYE
-        "Şam": [33.51, 36.29, "il"], "Halep": [36.20, 37.13, "il"], "Humus": [34.73, 36.71, "il"],
-        "Deyrizor": [35.33, 40.14, "us"], "Lazkiye": [35.53, 35.79, "il"], "Meyadin": [35.01, 40.45, "us"],
-        
-        # IRAK
-        "Bağdat": [33.31, 44.36, "us"], "Erbil": [36.19, 44.00, "ir"], "Cürf es-Sahar": [32.89, 44.18, "us"],
-        "Al Asad": [33.79, 42.43, "ir"], "Babil": [32.46, 44.40, "us"], "Kerkük": [35.46, 44.39, "us"],
-        
-        # YEMEN & KÖRFEZ
-        "Sanaa": [15.36, 44.19, "us"], "Hudeyde": [14.79, 42.95, "il"], "Taiz": [13.57, 43.95, "us"],
-        "Kızıldeniz": [15.50, 41.50, "ir"], "Aden": [12.80, 45.03, "ir"], "Hürmüz": [26.56, 56.45, "ir"]
+        "Şam": [33.51, 36.29, "il"], "Halep": [36.20, 37.13, "il"], "Deyrizor": [35.33, 40.14, "us"],
+        "Bağdat": [33.31, 44.36, "us"], "Erbil": [36.19, 44.00, "ir"], "Sanaa": [15.36, 44.19, "us"],
+        "Hudeyde": [14.79, 42.95, "il"], "Hürmüz": [26.56, 56.45, "ir"]
     }
 
     for q in queries:
@@ -138,7 +127,7 @@ st.markdown("""
 
 @st.fragment(run_every="600s")
 def map_render():
-    m = folium.Map(location=[32.0, 43.0], zoom_start=5, tiles="CartoDB dark_matter")
+    m = folium.Map(location=[32.0, 48.0], zoom_start=5, tiles="CartoDB dark_matter")
     m.get_root().html.add_child(folium.Element(pulse_css))
 
     try:
@@ -146,28 +135,45 @@ def map_render():
         folium.GeoJson(iran_geojson, style_function=lambda x: {'fillColor': '#330000', 'color': '#ff0000', 'weight': 1, 'fillOpacity': 0.15}).add_to(m)
     except: pass
 
-    # --- DEVASA SAVAŞ VERİTABANI (SİVİL KAYIPLAR DA EKLENDİ) ---
+    # --- DEVASA SAVAŞ VERİTABANI (İRAN'IN İÇİ DOLDURULDU) ---
     sabit_olaylar = [
-        # Askeri Hedefler
+        # İRAN'IN İÇİNDEKİ YENİ/YOĞUN HEDEFLER
         {"isim": "Parchin Askeri Kompleksi", "lat": 35.53, "lon": 51.77, "actor": "il", "desc": "Tahran Yakını Füze Üretim Tesisi Vuruldu"},
         {"isim": "İsfahan Radar Sistemi", "lat": 32.65, "lon": 51.66, "actor": "il", "desc": "S-300 Bataryaları İmha Edildi"},
-        {"isim": "Natanz Nükleer Tesisi Şevresi", "lat": 33.97, "lon": 51.92, "actor": "il", "desc": "Hava Savunma Hatlarına Önleyici Vuruş"},
+        {"isim": "Natanz Nükleer Tesisi Çevresi", "lat": 33.97, "lon": 51.92, "actor": "il", "desc": "Hava Savunma Hatlarına Önleyici Vuruş"},
         {"isim": "Fordow Zenginleştirme Tesisi", "lat": 34.88, "lon": 50.99, "actor": "il", "desc": "Yeraltı Tesisine Nüfuz Eden Bomba İddiası"},
         {"isim": "Bandar Abbas Limanı", "lat": 27.18, "lon": 56.28, "actor": "il", "desc": "İran Donanması Hızlı Hücumbotları Vuruldu"},
+        {"isim": "Kharg Adası Petrol Terminali", "lat": 29.23, "lon": 50.31, "actor": "il", "desc": "Petrol Sevkiyat Altyapısına Hasar Verildi"},
+        {"isim": "Tebriz Füze Siloları", "lat": 38.07, "lon": 46.29, "actor": "il", "desc": "Yeraltı Silolarına F-35 Operasyonu"},
+        {"isim": "Tahran Sivil Yerleşim (Hata/Şarapnel)", "lat": 35.72, "lon": 51.42, "actor": "il", "desc": "Hava savunma füzelerinin düşmesi sonucu sivil hasar"},
+        {"isim": "İsfahan Üniversitesi Yakını", "lat": 32.61, "lon": 51.66, "actor": "il", "desc": "Askeri tesise seken füzeler kampüs yakınına düştü"},
+        
+        # YENİ EKLENEN İRAN İÇİ HEDEFLER (Haritayı Doldurmak İçin)
+        {"isim": "Semnan Uzay ve Füze Merkezi", "lat": 35.58, "lon": 53.39, "actor": "il", "desc": "Balistik Füze Fırlatma Rampaları Vuruldu"},
+        {"isim": "Meşhed Hava Üssü Çevresi", "lat": 36.26, "lon": 59.61, "actor": "il", "desc": "Doğu İran'daki Erken Uyarı Radarları Etkisiz Hale Getirildi"},
+        {"isim": "Kirmanşah Yeraltı Füze Silosu", "lat": 34.31, "lon": 47.06, "actor": "il", "desc": "Batı Sınırındaki Stratejik Depolar Hedef Alındı"},
+        {"isim": "Hemedan Nojeh Hava Üssü", "lat": 35.19, "lon": 48.65, "actor": "il", "desc": "Savaş Uçağı Hangarları Vuruldu"},
+        {"isim": "Arak Ağır Su Reaktörü Çevresi", "lat": 34.09, "lon": 49.68, "actor": "il", "desc": "Tesis Yakınındaki Uçaksavar Bataryaları İmha Edildi"},
+        {"isim": "Çabahar Donanma Üssü", "lat": 25.28, "lon": 60.62, "actor": "il", "desc": "Umman Denizi Çıkışındaki Denizaltı Tesisleri Hedeflendi"},
+        {"isim": "Ahvaz Petrol Altyapısı", "lat": 31.31, "lon": 48.67, "actor": "il", "desc": "Güneydeki Kritik Rafinerilerde Hasar Bildirildi"},
+        {"isim": "Yezd Lojistik Merkezi", "lat": 31.89, "lon": 54.35, "actor": "il", "desc": "İran Devrim Muhafızları Lojistik Ağı Kesildi"},
+        {"isim": "Kum Hava Savunma Ağı", "lat": 34.64, "lon": 50.87, "actor": "il", "desc": "Başkenti Koruyan Radar Zinciri Vuruldu"},
+        {"isim": "Buşehr Nükleer Santrali Çevresi", "lat": 28.92, "lon": 50.83, "actor": "il", "desc": "Santrali Koruyan Sistemlere Siber ve Hava Saldırısı"},
+
+        # İSRAİL, SURİYE, LÜBNAN VE DİĞERLERİ
+        {"isim": "Şam Uluslararası Havalimanı", "lat": 33.41, "lon": 36.51, "actor": "il", "desc": "İran Devrim Muhafızları Kargo Uçağı Vuruldu"},
+        {"isim": "Halep Kırsalı Silah Deposu", "lat": 36.20, "lon": 37.13, "actor": "il", "desc": "Hizbullah İkmal Hattı Kesildi"},
+        {"isim": "Beyrut Dahiye Merkez", "lat": 33.85, "lon": 35.51, "actor": "il", "desc": "Hizbullah Üst Düzey Komuta Merkezi Vuruldu"},
+        {"isim": "Bekaa Vadisi", "lat": 34.00, "lon": 36.14, "actor": "il", "desc": "Hava Savunma Sistemleri İmha Edildi"},
+        {"isim": "Hudeyde Limanı (Yemen)", "lat": 14.79, "lon": 42.95, "actor": "il", "desc": "Husi Petrol Depoları İsrail F-15'lerince Vuruldu"},
         {"isim": "Nevatim Hava Üssü", "lat": 31.20, "lon": 35.01, "actor": "ir", "desc": "Balistik Füze Yağmuru - Pistlerde Hasar"},
         {"isim": "Ramon Hava Üssü", "lat": 30.77, "lon": 34.67, "actor": "ir", "desc": "Fettah Hipersonik Füzeleri Hedef Aldı"},
         {"isim": "Meron Hava Kontrol Üssü", "lat": 32.99, "lon": 35.41, "actor": "ir", "desc": "Hizbullah Anti-Tank Füzeleriyle Radar Vurdu"},
-        
-        # Sivil / Yan Hasar (Collateral Damage) Noktaları (2026 Senaryosu)
-        {"isim": "Tahran Sivil Yerleşim (Hata/Şarapnel)", "lat": 35.72, "lon": 51.42, "actor": "il", "desc": "Hava savunma füzelerinin düşmesi sonucu sivil hasar"},
-        {"isim": "İsfahan Üniversitesi Yakını", "lat": 32.61, "lon": 51.66, "actor": "il", "desc": "Askeri tesise seken füzeler kampüs yakınına düştü"},
         {"isim": "Tel Aviv (Kuzey Banliyöleri)", "lat": 32.11, "lon": 34.80, "actor": "ir", "desc": "Demir Kubbe'yi aşan füzeler sivil binalara isabet etti"},
         {"isim": "Aşkelon Hastane Yakını", "lat": 31.65, "lon": 34.56, "actor": "ir", "desc": "Roket saldırısı sebebiyle hastane çevresinde tahribat"},
         {"isim": "Beyrut Dahiye (Sivil Bloklar)", "lat": 33.84, "lon": 35.50, "actor": "il", "desc": "Hizbullah hedeflenirken sivil apartmanlar yıkıldı"},
         {"isim": "Şam Merkez (Sivil Mahalle)", "lat": 33.50, "lon": 36.30, "actor": "il", "desc": "İranlı komutanlara suikast girişimi sırasında sivil kayıplar"},
         {"isim": "Sanaa Yerleşim Bölgesi", "lat": 15.35, "lon": 44.20, "actor": "us", "desc": "Depo bombardımanı sırasında sivil altyapı etkilendi"},
-        
-        # Diğer Stratejik
         {"isim": "Erbil ABD Konsolosluğu Yakını", "lat": 36.23, "lon": 44.01, "actor": "ir", "desc": "Mossad Karargahı İddiasıyla Balistik Atış"},
         {"isim": "Sanaa Yeraltı Depoları", "lat": 15.36, "lon": 44.19, "actor": "us", "desc": "B-2 Spirit Bombardıman Uçakları Vurdu"},
         {"isim": "Cürf es-Sahar (Irak)", "lat": 32.89, "lon": 44.18, "actor": "us", "desc": "Ketaib Hizbullah İHA Üretim Tesisi Vuruldu"}
