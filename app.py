@@ -107,10 +107,15 @@ footer {visibility: hidden;}
     to { text-shadow: 0 0 10px #fff, 0 0 20px #ff0000, 0 0 30px #ff0000; }
 }
 
-/* SİDEBAR TEKNOLOJİK GÖRÜNÜM */
+/* SİDEBAR TEKNOLOJİK GÖRÜNÜM VE BEYAZ YAZI DÜZELTMESİ */
 [data-testid="stSidebar"] {
     border-right: 2px solid rgba(255, 75, 75, 0.3) !important;
     background: linear-gradient(180deg, #111315 0%, #1a1c1f 100%) !important;
+}
+/* Yönetici Şifresi Yazısını Beyaz Yapma */
+[data-testid="stSidebar"] .stTextInput label p {
+    color: #ffffff !important;
+    font-size: 16px;
 }
 
 /* HÜRMÜZ KUTUSU NEFES ALMA ANİMASYONU */
@@ -238,7 +243,8 @@ def scrape_war_news():
 haber_harita, haber_sidebar = scrape_war_news()
 
 with st.sidebar:
-    st.markdown("<h2 style='text-align:center;'>🎛️ KONTROL PANELİ</h2>", unsafe_allow_html=True)
+    # Başlık rengi beyaza çevrildi
+    st.markdown("<h2 style='text-align:center; color:white;'>🎛️ KONTROL PANELİ</h2>", unsafe_allow_html=True)
     
     password = st.text_input("Yönetici Şifresi", type="password")
     if password == "isedes":
@@ -267,14 +273,16 @@ with st.sidebar:
         if password: st.error("Hatalı Şifre")
 
     st.divider()
-    st.markdown("<h3 style='text-align:center;'>📰 CANLI HABER AKIŞI</h3>", unsafe_allow_html=True)
+    # Başlık rengi beyaza çevrildi
+    st.markdown("<h3 style='text-align:center; color:white;'>📰 CANLI HABER AKIŞI</h3>", unsafe_allow_html=True)
     for n in haber_sidebar[:20]:
         st.markdown(f"**•** <a href='{n['link']}' style='color:#a0aab5; text-decoration:none;' onmouseover=\"this.style.color='#ff4b4b'\" onmouseout=\"this.style.color='#a0aab5'\">{n['title']}</a>", unsafe_allow_html=True)
         st.divider()
 
 # --- ANA EKRAN ÜST VERİ PANELİ ---
 st.markdown("<h1 class='neon-title'>🇮🇷 İRAN SAVAŞ MONİTÖRÜ</h1>", unsafe_allow_html=True)
-st.caption(f"<div style='text-align:center; font-size:14px; margin-bottom:20px;'>Son Otomatik Güncelleme: {datetime.now().strftime('%H:%M:%S')} | Manuel Veri Güncelleme: {st.session_state.manual_data['last_update']}</div>", unsafe_allow_html=True)
+# Zamanların sonuna TSİ eklendi
+st.caption(f"<div style='text-align:center; font-size:14px; margin-bottom:20px; color:white;'>Son Otomatik Güncelleme: {datetime.now().strftime('%H:%M:%S')} TSİ | Manuel Veri Güncelleme: {st.session_state.manual_data['last_update']} TSİ</div>", unsafe_allow_html=True)
 
 # TRADINGVIEW / ÖZEL API CANLI VERİLERİ
 usd_try, _, _ = get_market_data("USDTRY", "forex", "FX_IDC", "TRY=X")
@@ -335,10 +343,11 @@ st.markdown(f"""
 
 # --- HARİTA BAŞLIĞI VE LEJANT ---
 st.divider()
+# Lejant rengi siyah yapıldı
 st.markdown("""
 <div style="text-align:center; font-family:'Rajdhani', sans-serif;">
     <h3 style="margin-bottom:5px;">🗺️ STRATEJİK SAVAŞ VE ÇATIŞMA HARİTASI</h3>
-    <span style="font-size:15px; color:#ddd;">
+    <span style="font-size:15px; color:#000000; font-weight: bold;">
     <b>LEJANT:</b> 🔴 <b>Kırmızı:</b> İran Saldırıları | 🟠 <b>Turuncu:</b> İsrail Saldırıları | 🔵 <b>Mavi:</b> ABD Saldırıları | 🛡️ <b>Gri Yıldız:</b> Askeri Üsler
     </span>
 </div>
