@@ -42,15 +42,23 @@ def calc_delta(current, prev):
     if prev == 0: return 0.0
     return ((current - prev) / prev) * 100
 
-# --- CSS / ARAYÜZ GİZLEME VE OKUNABİLİRLİK ---
+# --- CSS / ARAYÜZ GİZLEME, ESTETİK VE ANİMASYONLAR ---
 pulse_css = """
 <style>
-/* STREAMLIT ARAYÜZÜNÜ GİZLEME (Share, Menu, Footer) */
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap');
+
+/* GENEL FONT AYARI */
+html, body, [class*="css"] {
+    font-family: 'Rajdhani', sans-serif !important;
+}
+
+/* STREAMLIT ARAYÜZÜNÜ GİZLEME */
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
 footer {visibility: hidden;}
 .stDeployButton {display: none;}
 
+/* HARİTA İKON ANİMASYONLARI */
 @keyframes pulse_red {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 0, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);}}
 @keyframes pulse_orange {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 165, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0);}}
 @keyframes pulse_cyan {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(0, 255, 255, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(0, 255, 255, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(0, 255, 255, 0);}}
@@ -59,21 +67,69 @@ footer {visibility: hidden;}
 .strike-il {width: 12px; height: 12px; background-color: #ff9900; border-radius: 50%; border: 1.5px solid white; animation: pulse_orange 2.5s infinite;}
 .strike-us {width: 12px; height: 12px; background-color: #00ffff; border-radius: 50%; border: 1.5px solid white; animation: pulse_cyan 2.5s infinite;}
 
+/* METRİK KARTLARI (HOVER VE GÖLGE EFEKTLERİ) */
 [data-testid="stMetric"] { 
-    background-color: #1e2126 !important; 
+    background: linear-gradient(145deg, #1e2126, #17191c) !important; 
     padding: 15px !important; 
     border-radius: 8px !important; 
     border-left: 4px solid #ff4b4b !important; 
     box-shadow: 0 4px 6px rgba(0,0,0,0.3) !important;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-left 0.3s ease !important;
+}
+[data-testid="stMetric"]:hover {
+    transform: translateY(-5px) !important;
+    border-left: 4px solid #ff0000 !important;
+    box-shadow: 0 8px 20px rgba(255, 75, 75, 0.5) !important;
 }
 [data-testid="stMetricLabel"] { 
     color: #a0aab5 !important; 
     font-weight: 600 !important;
-    font-size: 14px !important;
+    font-size: 15px !important;
+    letter-spacing: 0.5px;
 }
 [data-testid="stMetricValue"] { 
     color: #ffffff !important; 
     font-weight: bold !important;
+}
+
+/* ANA BAŞLIK NEON EFEKTİ */
+.neon-title {
+    text-align: center;
+    font-weight: 700;
+    font-size: 2.8rem;
+    color: #ffffff;
+    letter-spacing: 2px;
+    margin-bottom: -10px;
+    animation: neon_glow 2s ease-in-out infinite alternate;
+}
+@keyframes neon_glow {
+    from { text-shadow: 0 0 5px #fff, 0 0 10px #ff4b4b, 0 0 15px #ff4b4b; }
+    to { text-shadow: 0 0 10px #fff, 0 0 20px #ff0000, 0 0 30px #ff0000; }
+}
+
+/* SİDEBAR TEKNOLOJİK GÖRÜNÜM */
+[data-testid="stSidebar"] {
+    border-right: 2px solid rgba(255, 75, 75, 0.3) !important;
+    background: linear-gradient(180deg, #111315 0%, #1a1c1f 100%) !important;
+}
+
+/* HÜRMÜZ KUTUSU NEFES ALMA ANİMASYONU */
+.hurmuz-box {
+    padding: 15px; 
+    color: white; 
+    border-radius: 8px; 
+    margin-top: 15px; 
+    margin-bottom: 15px; 
+    font-weight: bold; 
+    text-align: center; 
+    font-size: 20px;
+    letter-spacing: 1px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    animation: breath 2.5s infinite alternate ease-in-out;
+}
+@keyframes breath {
+    0% { transform: scale(0.99); box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+    100% { transform: scale(1.01); box-shadow: 0 0 20px currentColor; }
 }
 </style>
 """
@@ -107,30 +163,24 @@ def get_market_data(tv_symbol, tv_screener, tv_exchange, yf_ticker):
 @st.cache_data(ttl=600)
 def get_uranium_data():
     try:
-        # Siteyi kandırmak için bir tarayıcı kimliği kullanıyoruz
         req = urllib.request.Request(
             "https://tradingeconomics.com/commodity/uranium", 
             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         )
         html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8')
         
-        # Metnin içinden fiyatı bul ("84.30 USD/Lbs")
         price_match = re.search(r'([0-9.]+)\s+USD/Lbs', html)
         if price_match:
             price = float(price_match.group(1))
-            
-            # Aynı metinden yüzde değişimini bul ("up 0.18%" veya "down 0.18%")
             pct_match = re.search(r'(up|down)\s+([0-9.]+)%', html)
             pct = 0.0
             if pct_match:
                 pct_val = float(pct_match.group(2))
                 pct = pct_val if pct_match.group(1) == 'up' else -pct_val
-                
             return price, 0.0, pct
     except:
         pass
     
-    # TE Sitesi engellerse sistem çökmesin diye yedek ETF (Global X Uranium) devreye girer
     return get_market_data("URA", "america", "AMEX", "URA")
 
 def jitter(val, amount=0.15): 
@@ -188,7 +238,7 @@ def scrape_war_news():
 haber_harita, haber_sidebar = scrape_war_news()
 
 with st.sidebar:
-    st.title("🎛️ KONTROL PANELİ")
+    st.markdown("<h2 style='text-align:center;'>🎛️ KONTROL PANELİ</h2>", unsafe_allow_html=True)
     
     password = st.text_input("Yönetici Şifresi", type="password")
     if password == "isedes":
@@ -217,14 +267,14 @@ with st.sidebar:
         if password: st.error("Hatalı Şifre")
 
     st.divider()
-    st.subheader("📰 CANLI HABER AKIŞI")
+    st.markdown("<h3 style='text-align:center;'>📰 CANLI HABER AKIŞI</h3>", unsafe_allow_html=True)
     for n in haber_sidebar[:20]:
-        st.markdown(f"**•** [{n['title']}]({n['link']})")
+        st.markdown(f"**•** <a href='{n['link']}' style='color:#a0aab5; text-decoration:none;' onmouseover=\"this.style.color='#ff4b4b'\" onmouseout=\"this.style.color='#a0aab5'\">{n['title']}</a>", unsafe_allow_html=True)
         st.divider()
 
 # --- ANA EKRAN ÜST VERİ PANELİ ---
-st.title("🇮🇷 İRAN SAVAŞ MONİTÖRÜ")
-st.caption(f"Son Otomatik Güncelleme: {datetime.now().strftime('%H:%M:%S')} | Manuel Veri Güncelleme: {st.session_state.manual_data['last_update']}")
+st.markdown("<h1 class='neon-title'>🇮🇷 İRAN SAVAŞ MONİTÖRÜ</h1>", unsafe_allow_html=True)
+st.caption(f"<div style='text-align:center; font-size:14px; margin-bottom:20px;'>Son Otomatik Güncelleme: {datetime.now().strftime('%H:%M:%S')} | Manuel Veri Güncelleme: {st.session_state.manual_data['last_update']}</div>", unsafe_allow_html=True)
 
 # TRADINGVIEW / ÖZEL API CANLI VERİLERİ
 usd_try, _, _ = get_market_data("USDTRY", "forex", "FX_IDC", "TRY=X")
@@ -233,7 +283,7 @@ silver_oz, _, sp = get_market_data("XAGUSD", "forex", "FX_IDC", "SI=F")
 brent_v, _, bp = get_market_data("UKOIL", "cfd", "TVC", "BZ=F")
 wti, _, _ = get_market_data("USOIL", "cfd", "TVC", "CL=F")
 ttf_gas, _, ttf_p = get_market_data("TTF1!", "cfd", "ICEEUR", "TTF=F") 
-uranium, _, ura_p = get_uranium_data() # Yeni TE URANYUM Fonksiyonu
+uranium, _, ura_p = get_uranium_data()
 vix, _, vp = get_market_data("VIX", "america", "CBOE", "^VIX")
 us10y, _, up10 = get_market_data("US10Y", "cfd", "TVC", "^TNX")
 tr10y, _, _ = get_market_data("TR10Y", "cfd", "TVC", "TUR")
@@ -264,7 +314,7 @@ c7.metric("Alüminyum", f"${alum:.2f}", f"{ap:+.2f}%")
 c8.metric("Uranyum", f"${uranium:.2f}", f"{ura_p:+.2f}%" if uranium > 0 else "Veri Çekiliyor...")
 
 c9, c10, c11, c12 = st.columns(4)
-c9.metric("Baltic Dry (Navlun Proxy)", f"${bdry:.2f}", f"{bdp:+.2f}%")
+c9.metric("Baltic Dry (Navlun)", f"${bdry:.2f}", f"{bdp:+.2f}%")
 c10.metric("VIX (Korku)", f"{vix:.2f}", f"{vp:+.2f}%")
 c11.metric("ABD 10Y Tahvil", f"%{us10y:.2f}", f"{up10:+.2f}%")
 c12.metric("Türkiye 10Y", f"${tr10y:.2f}", "AUTO")
@@ -275,21 +325,25 @@ c14.metric("Polyester", f"${st.session_state.manual_data['polyester']}", f"{d_po
 c15.metric("Gübre", f"${st.session_state.manual_data['gubre']}", f"{d_gubre:+.2f}% (Mnl)")
 c16.metric("Türkiye 5Y CDS", f"{st.session_state.manual_data['tr_5y_cds']:.1f}", f"{d_cds:+.2f}% (Mnl)")
 
-# Hürmüz Durumu Bildirimi
-hurmuz_renk = "blue" if "AÇIK" in st.session_state.manual_data['hurmuz'] else "red" if "KAPALI" in st.session_state.manual_data['hurmuz'] else "orange"
+# Hürmüz Durumu Bildirimi (Animasyonlu)
+hurmuz_renk = "#0055ff" if "AÇIK" in st.session_state.manual_data['hurmuz'] else "#ff0000" if "KAPALI" in st.session_state.manual_data['hurmuz'] else "#ffaa00"
 st.markdown(f"""
-<div style="padding: 15px; background-color: {hurmuz_renk}; color: white; border-radius: 8px; margin-top: 15px; margin-bottom: 15px; font-weight: bold; text-align: center; font-size: 18px;">
-    🚀 HÜRMÜZ BOĞAZI DURUMU: {st.session_state.manual_data['hurmuz']}
+<div class="hurmuz-box" style="background-color: {hurmuz_renk}; color: {hurmuz_renk};">
+    <span style="color:white;">🚀 HÜRMÜZ BOĞAZI DURUMU: {st.session_state.manual_data['hurmuz']}</span>
 </div>
 """, unsafe_allow_html=True)
 
 # --- HARİTA BAŞLIĞI VE LEJANT ---
 st.divider()
 st.markdown("""
-### 🗺️ Stratejik Savaş ve Çatışma Haritası
-**LEJANT:** 🔴 **Kırmızı:** İran Saldırıları/Operasyonları | 🟠 **Turuncu:** İsrail Saldırıları/Operasyonları | 🔵 **Mavi:** ABD Saldırıları/Operasyonları  
-🛡️ **Gri Yıldız:** Kritik Askeri Üsler ve Karargahlar
-""")
+<div style="text-align:center; font-family:'Rajdhani', sans-serif;">
+    <h3 style="margin-bottom:5px;">🗺️ STRATEJİK SAVAŞ VE ÇATIŞMA HARİTASI</h3>
+    <span style="font-size:15px; color:#ddd;">
+    <b>LEJANT:</b> 🔴 <b>Kırmızı:</b> İran Saldırıları | 🟠 <b>Turuncu:</b> İsrail Saldırıları | 🔵 <b>Mavi:</b> ABD Saldırıları | 🛡️ <b>Gri Yıldız:</b> Askeri Üsler
+    </span>
+</div>
+<br>
+""", unsafe_allow_html=True)
 
 # --- HARİTA ---
 @st.fragment(run_every="600s")
@@ -362,11 +416,11 @@ def map_render():
         haber_linki = olay.get('link', f"https://news.google.com/search?q={arama_sorgusu}&hl=tr&gl=TR&ceid=TR:tr")
 
         popup_html = f"""
-            <div style='color:white; background:#111; padding:12px; border-radius:6px; border:1px solid {border}; width:220px;'>
-                <b style='color:{border}; font-size:14px;'>📍 {olay.get('isim', 'SALDIRI NOKTASI')}</b><br>
+            <div style='color:white; background:#111; padding:12px; border-radius:6px; border:1px solid {border}; width:220px; font-family:"Rajdhani", sans-serif;'>
+                <b style='color:{border}; font-size:15px;'>📍 {olay.get('isim', 'SALDIRI NOKTASI')}</b><br>
                 <hr style='margin:6px 0; border-color:#333;'>
-                <span style='font-size:12px; color:#ddd;'>{olay.get('desc', '')}</span><br>
-                <a href='{haber_linki}' target='_blank' style='display:inline-block; margin-top:10px; color:#fff; background-color:{border}; text-decoration:none; font-size:11px; padding:4px 8px; border-radius:4px; font-weight:bold;'>🔗 HABERE GİT</a>
+                <span style='font-size:13px; color:#ddd;'>{olay.get('desc', '')}</span><br>
+                <a href='{haber_linki}' target='_blank' style='display:inline-block; margin-top:10px; color:#fff; background-color:{border}; text-decoration:none; font-size:12px; padding:5px 10px; border-radius:4px; font-weight:bold;'>🔗 HABERE GİT</a>
             </div>
         """
         
