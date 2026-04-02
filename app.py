@@ -24,15 +24,13 @@ if 'manual_data' not in st.session_state:
         "prev_gubre": 480.0,
         "tr_5y_cds": 265.0,
         "prev_tr_5y_cds": 265.0,
-        "avrupa_dgaz": 32.40,
-        "prev_avrupa_dgaz": 32.40,
         "jet_yakit": 85.20,
         "prev_jet_yakit": 85.20,
         "last_update": datetime.now().strftime('%H:%M:%S')
     }
 else:
     # Eski session'dan gelen eksik anahtarlar varsa otomatik tamamla (KeyError'u önler)
-    anahtarlar = ["avrupa_dgaz", "jet_yakit", "polyester", "gubre", "tr_5y_cds", "hurmuz"]
+    anahtarlar = ["jet_yakit", "polyester", "gubre", "tr_5y_cds", "hurmuz"]
     for k in anahtarlar:
         prev_k = f"prev_{k}"
         if prev_k not in st.session_state.manual_data:
@@ -101,7 +99,7 @@ def get_market_data(tv_symbol, tv_screener, tv_exchange, yf_ticker):
 def jitter(val, amount=0.15): 
     return val + random.uniform(-amount, amount)
 
-# --- GELİŞMİŞ HABER TARAYICI (Harita Bozulmadı) ---
+# --- GELİŞMİŞ HABER TARAYICI ---
 @st.cache_data(ttl=600)
 def scrape_war_news():
     queries = [
@@ -113,7 +111,6 @@ def scrape_war_news():
     all_news_sidebar = []
     
     geo_db = {
-        # İRAN
         "Tahran": [35.68, 51.38, "il"], "İsfahan": [32.65, 51.66, "il"], "Natanz": [33.97, 51.92, "il"],
         "Tebriz": [38.07, 46.29, "il"], "Şiraz": [29.59, 52.58, "il"], "Buşehr": [28.92, 50.83, "il"],
         "Kerec": [35.83, 50.99, "il"], "Kum": [34.64, 50.87, "il"], "Ahvaz": [31.31, 48.67, "il"],
@@ -121,13 +118,11 @@ def scrape_war_news():
         "Meşhed": [36.26, 59.61, "il"], "Semnan": [35.58, 53.39, "il"], "Arak": [34.09, 49.68, "il"],
         "Çabahar": [25.28, 60.62, "il"], "Hemedan": [35.19, 48.65, "il"], "Yezd": [31.89, 54.35, "il"],
         
-        # İSRAİL
         "Tel Aviv": [32.08, 34.78, "ir"], "Hayfa": [32.79, 34.98, "ir"], "Eilat": [29.55, 34.95, "ir"],
         "Kudüs": [31.76, 35.21, "ir"], "Negev": [30.80, 34.84, "ir"], "Aşkelon": [31.66, 34.57, "ir"],
         "Aşdod": [31.80, 34.65, "ir"], "Safed": [32.96, 35.49, "ir"], "Netanya": [32.32, 34.85, "ir"],
         "Dimona": [31.07, 35.02, "ir"], "Meron": [32.99, 35.41, "ir"], "Golan": [33.01, 35.75, "ir"],
         
-        # LÜBNAN & SURİYE & IRAK & YEMEN
         "Beyrut": [33.89, 35.50, "il"], "Dahiye": [33.85, 35.51, "il"], "Baalbek": [34.00, 36.21, "il"],
         "Şam": [33.51, 36.29, "il"], "Halep": [36.20, 37.13, "il"], "Deyrizor": [35.33, 40.14, "us"],
         "Bağdat": [33.31, 44.36, "us"], "Erbil": [36.19, 44.00, "ir"], "Sanaa": [15.36, 44.19, "us"],
@@ -137,11 +132,9 @@ def scrape_war_news():
     for q in queries:
         feed = feedparser.parse(f"https://news.google.com/rss/search?q={q}+after:2026-02-27&hl=tr&gl=TR&ceid=TR:tr")
         for entry in feed.entries[:25]:
-            # Sidebar için haber akışına ekle
             if entry.title not in [n["title"] for n in all_news_sidebar]:
                 all_news_sidebar.append({"title": entry.title, "link": entry.link, "date": entry.published})
 
-            # Harita için şehir eşleşmesi ara
             for city, info in geo_db.items():
                 if city.lower() in entry.title.lower():
                     found_strikes.append({
@@ -163,27 +156,23 @@ with st.sidebar:
     password = st.text_input("Yönetici Şifresi", type="password")
     if password == "isedes":
         st.success("Erişim Onaylandı")
-        with st.expander("📝 VERİLERİ GÜNCELLE", expanded=True):
+        with st.expander("📝 MANUEL VERİLERİ GÜNCELLE", expanded=True):
             m_hurmuz = st.selectbox("Hürmüz Durumu", ["AÇIK / GÜVENLİ", "RİSKLİ", "KISMEN KAPALI", "KAPALI"], index=["AÇIK / GÜVENLİ", "RİSKLİ", "KISMEN KAPALI", "KAPALI"].index(st.session_state.manual_data["hurmuz"]))
             m_poly = st.number_input("Polyester ($/Ton)", value=st.session_state.manual_data["polyester"])
             m_gubre = st.number_input("Gübre ($/Ton)", value=st.session_state.manual_data["gubre"])
             m_cds = st.number_input("Türkiye 5Y CDS", value=st.session_state.manual_data["tr_5y_cds"])
-            m_dgaz = st.number_input("Avrupa Doğal Gaz (€/MWh)", value=st.session_state.manual_data["avrupa_dgaz"])
             m_jet = st.number_input("Jet Yakıt ($/Bbl)", value=st.session_state.manual_data["jet_yakit"])
             
             if st.button("SİSTEMİ GÜNCELLE VE KAYDET"):
-                # Mevcut verileri 'prev' (önceki) olarak kaydet
                 st.session_state.manual_data["prev_hurmuz"] = st.session_state.manual_data["hurmuz"]
                 st.session_state.manual_data["prev_polyester"] = st.session_state.manual_data["polyester"]
                 st.session_state.manual_data["prev_gubre"] = st.session_state.manual_data["gubre"]
                 st.session_state.manual_data["prev_tr_5y_cds"] = st.session_state.manual_data["tr_5y_cds"]
-                st.session_state.manual_data["prev_avrupa_dgaz"] = st.session_state.manual_data["avrupa_dgaz"]
                 st.session_state.manual_data["prev_jet_yakit"] = st.session_state.manual_data["jet_yakit"]
                 
-                # Yeni verileri ata
                 st.session_state.manual_data.update({
                     "hurmuz": m_hurmuz, "polyester": m_poly, "gubre": m_gubre,
-                    "tr_5y_cds": m_cds, "avrupa_dgaz": m_dgaz, "jet_yakit": m_jet,
+                    "tr_5y_cds": m_cds, "jet_yakit": m_jet,
                     "last_update": datetime.now().strftime('%H:%M:%S')
                 })
                 st.rerun()
@@ -206,6 +195,8 @@ gold_oz, _, gp = get_market_data("XAUUSD", "forex", "FX_IDC", "GC=F")
 silver_oz, _, sp = get_market_data("XAGUSD", "forex", "FX_IDC", "SI=F")
 brent_v, _, bp = get_market_data("UKOIL", "cfd", "TVC", "BZ=F")
 wti, _, _ = get_market_data("USOIL", "cfd", "TVC", "CL=F")
+ttf_gas, _, ttf_p = get_market_data("TTF1!", "cfd", "ICEEUR", "TTF=F") # Avrupa Doğal Gaz TTF (Otomatik)
+uranium, _, ura_p = get_market_data("UX1!", "cfd", "CME", "UX=F") # Uranyum (Otomatik)
 vix, _, vp = get_market_data("VIX", "america", "CBOE", "^VIX")
 us10y, _, up10 = get_market_data("US10Y", "cfd", "TVC", "^TNX")
 tr10y, _, _ = get_market_data("TR10Y", "cfd", "TVC", "TUR")
@@ -216,36 +207,40 @@ bdry, _, bdp = get_market_data("BDI", "index", "TVC", "BDRY")
 gram_altin = (gold_oz / 31.1035) * usd_try if usd_try > 0 else 0
 gram_gumus = (silver_oz / 31.1035) * usd_try if usd_try > 0 else 0
 
-# Manuel Veriler İçin Değişim (Delta) Hesaplamaları
-d_dgaz = calc_delta(st.session_state.manual_data['avrupa_dgaz'], st.session_state.manual_data['prev_avrupa_dgaz'])
+# Manuel Veriler İçin Değişim Hesaplamaları
 d_jet = calc_delta(st.session_state.manual_data['jet_yakit'], st.session_state.manual_data['prev_jet_yakit'])
 d_poly = calc_delta(st.session_state.manual_data['polyester'], st.session_state.manual_data['prev_polyester'])
 d_gubre = calc_delta(st.session_state.manual_data['gubre'], st.session_state.manual_data['prev_gubre'])
 d_cds = calc_delta(st.session_state.manual_data['tr_5y_cds'], st.session_state.manual_data['prev_tr_5y_cds'])
 
-# Satır 1
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Baltic Dry (Navlun)", f"{bdry:.0f}", f"{bdp:+.2f}%")
-c2.metric("Brent Vadeli", f"${brent_v:.2f}", f"{bp:+.2f}%")
-c3.metric("Brent Spot (Tahmini)", f"${brent_v - 0.4: .2f}")
-c4.metric("Sıvı Hidrokarbon (WTI)", f"${wti:.2f}")
-c5.metric("Avrupa Doğal Gaz", f"€{st.session_state.manual_data['avrupa_dgaz']}", f"{d_dgaz:+.2f}% (Mnl)")
+# KARTLAR İÇİN YENİ 4x4 (16 Veri) DÜZENİ
+# Satır 1: Enerji ve Stratejik Yakıtlar
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Brent Vadeli", f"${brent_v:.2f}", f"{bp:+.2f}%")
+c2.metric("Brent Spot (Tahmini)", f"${brent_v - 0.4: .2f}")
+c3.metric("Sıvı Hidrok. (WTI)", f"${wti:.2f}")
+c4.metric("Avrupa Doğal Gaz", f"€{ttf_gas:.2f}", f"{ttf_p:+.2f}%" if ttf_gas > 0 else "Veri Çekiliyor...")
 
-# Satır 2
-c6, c7, c8, c9, c10 = st.columns(5)
-c6.metric("Jet Yakıt", f"${st.session_state.manual_data['jet_yakit']}", f"{d_jet:+.2f}% (Mnl)")
+# Satır 2: Değerli Metaller & Madenler
+c5, c6, c7, c8 = st.columns(4)
+c5.metric("Altın Gram", f"₺{gram_altin:.2f}", f"{gp:+.2f}%")
+c6.metric("Gümüş Gram", f"₺{gram_gumus:.2f}", f"{sp:+.2f}%")
 c7.metric("Alüminyum", f"${alum:.2f}", f"{ap:+.2f}%")
-c8.metric("Polyester", f"${st.session_state.manual_data['polyester']}", f"{d_poly:+.2f}% (Mnl)")
-c9.metric("Gübre", f"${st.session_state.manual_data['gubre']}", f"{d_gubre:+.2f}% (Mnl)")
-c10.metric("Altın Gram", f"₺{gram_altin:.2f}", f"{gp:+.2f}%")
+c8.metric("Uranyum", f"${uranium:.2f}", f"{ura_p:+.2f}%" if uranium > 0 else "Veri Çekiliyor...")
 
-# Satır 3
-c11, c12, c13, c14, c15 = st.columns(5)
-c11.metric("Gümüş Gram", f"₺{gram_gumus:.2f}", f"{sp:+.2f}%")
-c12.metric("VIX (Korku)", f"{vix:.2f}", f"{vp:+.2f}%")
-c13.metric("ABD 10Y Tahvil", f"%{us10y:.2f}", f"{up10:+.2f}%")
-c14.metric("Türkiye 5Y CDS", f"{st.session_state.manual_data['tr_5y_cds']:.1f}", f"{d_cds:+.2f}% (Mnl)")
-c15.metric("Türkiye 10Y", f"${tr10y:.2f}", "AUTO")
+# Satır 3: Navlun & Makro Ekonomik Göstergeler
+c9, c10, c11, c12 = st.columns(4)
+c9.metric("Baltic Dry (Navlun)", f"{bdry:.0f}", f"{bdp:+.2f}%")
+c10.metric("VIX (Korku)", f"{vix:.2f}", f"{vp:+.2f}%")
+c11.metric("ABD 10Y Tahvil", f"%{us10y:.2f}", f"{up10:+.2f}%")
+c12.metric("Türkiye 10Y", f"${tr10y:.2f}", "AUTO")
+
+# Satır 4: Tedarik & Risk (Manuel Kontrol)
+c13, c14, c15, c16 = st.columns(4)
+c13.metric("Jet Yakıt", f"${st.session_state.manual_data['jet_yakit']}", f"{d_jet:+.2f}% (Mnl)")
+c14.metric("Polyester", f"${st.session_state.manual_data['polyester']}", f"{d_poly:+.2f}% (Mnl)")
+c15.metric("Gübre", f"${st.session_state.manual_data['gubre']}", f"{d_gubre:+.2f}% (Mnl)")
+c16.metric("Türkiye 5Y CDS", f"{st.session_state.manual_data['tr_5y_cds']:.1f}", f"{d_cds:+.2f}% (Mnl)")
 
 # Hürmüz Durumu Bildirimi
 hurmuz_renk = "blue" if "AÇIK" in st.session_state.manual_data['hurmuz'] else "red" if "KAPALI" in st.session_state.manual_data['hurmuz'] else "orange"
