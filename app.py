@@ -61,6 +61,13 @@ header {visibility: hidden;}
 footer {visibility: hidden;}
 .stDeployButton {display: none;}
 
+/* MANUEL VERİ GİRİŞİ ETİKETLERİNİ BEYAZ YAPMA */
+[data-testid="stSidebar"] label p { 
+    color: #ffffff !important; 
+    font-size: 16px !important; 
+    font-weight: bold !important; 
+}
+
 /* HARİTA İKON ANİMASYONLARI */
 @keyframes pulse_red {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 0, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);}}
 @keyframes pulse_orange {0% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0.6);} 50% {transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255, 165, 0, 0);} 100% {transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0);}}
