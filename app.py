@@ -293,7 +293,6 @@ with st.sidebar:
 st.markdown("<h1 class='neon-title'>🇮🇷 İRAN SAVAŞ MONİTÖRÜ</h1>", unsafe_allow_html=True)
 # Zamanların sonuna TSİ eklendi
 # Bu satır, ekranın üstündeki "Son Otomatik Güncelleme..." yazısını basar
-st.markdown(f"<div style='text-align:center; font-size:15px; color:black; font-weight:bold; margin-bottom:20px;'>Son Otomatik Güncelleme: {get_tsi_time()} TSİ | Manuel Veri Güncelleme: {st.session_state.manual_data['last_update']} TSİ</div>", unsafe_allow_html=True)
 # TRADINGVIEW / ÖZEL API CANLI VERİLERİ
 usd_try, _, _ = get_market_data("USDTRY", "forex", "FX_IDC", "TRY=X")
 gold_oz, _, gp = get_market_data("XAUUSD", "forex", "FX_IDC", "GC=F")
